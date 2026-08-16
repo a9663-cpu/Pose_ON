@@ -1,10 +1,15 @@
 /**
  * 익명 사용 기록 + 피드백 저장 (Supabase REST API).
  *
- * **방문자 한 명당 한 행**만 만든다. 행동할 때마다 행이 쌓이지 않고 같은 행을 덮어쓴다.
- *   visitor_id  브라우저에서 만든 익명 UUID
- *   liked       찜하기를 한 번이라도 눌렀는가 (true / false)
- *   score       피드백 점수 1~5
+ * **방문 한 번당 한 행**을 만든다. 행동할 때마다 행이 쌓이지 않고 그 방문의 행을 덮어쓴다.
+ *   visit_id  이번 방문을 가리키는 익명 UUID
+ *   liked     이번 방문에 찜하기를 한 번이라도 눌렀는가 (true / false)
+ *   score     이번 방문에 남긴 피드백 점수 1~5
+ *
+ * "방문"의 기준은 sessionStorage 다.
+ *   - 화면을 옮기거나 새로고침해도 같은 방문 (행이 안 늘어난다)
+ *   - 탭이나 브라우저를 닫았다 다시 오면 새 방문 (행이 하나 더 생긴다)
+ * 조건·찜 목록·피드백 팝업과 완전히 같은 기준이라 서로 어긋나지 않는다.
  *
  * 저장은 테이블에 직접 쓰지 않고 `record_visit` 함수(RPC)를 호출한다.
  * 그래야 테이블 자체는 RLS 로 완전히 잠가둘 수 있다. (supabase/schema.sql 참고)
@@ -14,14 +19,15 @@
  * 설계 원칙
  *  - 절대 서비스 동작을 방해하지 않는다. 네트워크 실패·설정 누락·저장소 차단 모두
  *    조용히 무시하고 넘어간다. 기록이 안 남을 뿐 앱은 그대로 돌아간다.
- *  - 개인정보를 모으지 않는다. 방문자 식별은 브라우저에서 만든 무작위 UUID 하나뿐이다.
+ *  - 개인정보를 모으지 않는다. 남는 건 무작위 UUID 하나뿐이고 사람을 추적하지 않는다.
  *  - supabase-js 라이브러리를 쓰지 않는다. PostgREST 엔드포인트에 fetch 한 번이면 끝이고,
  *    빌드 도구가 없는 이 프로젝트 구조와도 맞는다.
  */
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 
-const STORAGE_KEY = 'pose-on:analytics:v1';
+const VISIT_ID_KEY = 'pose-on:visit:v1';
+const LEGACY_LOCAL_KEY = 'pose-on:analytics:v1';
 const RECORD_ENDPOINT = '/rest/v1/rpc/record_visit';
 
 /**
@@ -74,64 +80,56 @@ function createUuid() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function readStore() {
+/**
+ * 이번 방문을 가리키는 id. sessionStorage 에 담아서
+ *   - 새로고침·화면 이동에는 그대로 유지되고 (같은 방문)
+ *   - 탭이나 브라우저를 닫으면 사라진다 (다음엔 새 방문)
+ */
+function getVisitId() {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw === null ? null : JSON.parse(raw);
-    return parsed !== null && typeof parsed === 'object' ? parsed : {};
+    const stored = window.sessionStorage.getItem(VISIT_ID_KEY);
+    if (typeof stored === 'string' && stored.length > 0) return stored;
+
+    const visitId = createUuid();
+    window.sessionStorage.setItem(VISIT_ID_KEY, visitId);
+    return visitId;
   } catch {
-    return {};
+    // 저장소가 막힌 환경에서는 이 페이지가 살아있는 동안만 쓰는 임시 id 를 만든다.
+    fallbackVisitId ??= createUuid();
+    return fallbackVisitId;
   }
 }
 
-/** @param {Record<string, unknown>} patch */
-function updateStore(patch) {
+/** @type {string | undefined} */
+let fallbackVisitId;
+
+/**
+ * 새 방문 id 를 발급해 "탭을 닫았다 다시 연 것"과 같은 상태로 만든다. 테스트용.
+ * 실제로는 탭을 닫았다 열면 자동으로 새 방문이 된다.
+ * @returns {string} 새로 만들어진 방문 id
+ */
+export function startNewVisit() {
+  const visitId = createUuid();
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...readStore(), ...patch }));
+    window.sessionStorage.setItem(VISIT_ID_KEY, visitId);
   } catch {
-    // 저장이 막힌 브라우저(시크릿 모드 등)에서는 이번 세션 동안만 유지된다.
+    fallbackVisitId = visitId;
   }
-}
-
-/**
- * 브라우저에 한 번만 만들어 두고 계속 재사용하는 익명 방문자 id.
- *
- * 이 값이 그대로이기 때문에 같은 브라우저에서 몇 번을 다시 들어와도
- * DB 에는 그 사람 행 하나만 유지된다. ("1명당 id 1개")
- * 그래서 혼자 테스트하면 행이 계속 1개로 보이는 게 정상이다.
- * 새 사람인 척하려면 poseOnNewVisitor() 로 id 를 새로 만들면 된다.
- */
-function getVisitorId() {
-  const stored = readStore().visitorId;
-  if (typeof stored === 'string' && stored.length > 0) return stored;
-
-  const visitorId = createUuid();
-  updateStore({ visitorId });
-  return visitorId;
-}
-
-/**
- * 방문자 id 를 새로 발급해 "다른 사람"으로 만든다. 테스트용.
- * 실제 사용자는 각자 브라우저가 다르므로 이 함수를 쓸 일이 없다.
- * @returns {string} 새로 만들어진 id
- */
-export function resetVisitorId() {
-  const visitorId = createUuid();
-  updateStore({ visitorId });
   hasReportedLike = false;
   recordVisit();
   console.log(
-    `[analytics] 새 방문자로 바꿨습니다: ${visitorId}\n` +
-      '  다음 찜/피드백은 새 행에 기록됩니다. (기존 행은 그대로 남습니다)',
+    `[analytics] 새 방문으로 바꿨습니다: ${visitId}\n` +
+      '  DB 에 행이 하나 더 생깁니다. (기존 행은 그대로 남습니다)',
   );
-  return visitorId;
+  return visitId;
 }
 
-// 예전 버전은 피드백 응답 여부를 localStorage 에 넣어 "평생 한 번"만 물었다.
-// 지금은 sessionStorage 로 옮겼으므로 남아 있는 값을 정리한다.
-// 이걸 안 지우면 예전 사용자에게는 계속 안 뜨는 것처럼 보인다.
-if (readStore().feedbackState !== undefined) {
-  updateStore({ feedbackState: undefined });
+// 예전 버전은 방문자 id 와 피드백 응답 여부를 localStorage 에 남겼다.
+// 지금은 둘 다 sessionStorage 기준(방문 단위)이라 남은 값을 정리한다.
+try {
+  window.localStorage.removeItem(LEGACY_LOCAL_KEY);
+} catch {
+  // 지우지 못해도 더 이상 읽지 않으므로 동작에는 영향이 없다.
 }
 
 /**
@@ -152,8 +150,8 @@ function requestHeaders() {
 }
 
 /**
- * record_visit 함수를 호출해 이 방문자의 행을 만들거나 갱신한다.
- * 같은 방문자를 여러 번 호출해도 행은 하나뿐이다.
+ * record_visit 함수를 호출해 이번 방문의 행을 만들거나 갱신한다.
+ * 같은 방문 안에서 여러 번 호출해도 행은 하나뿐이다.
  *
  * @param {{ liked?: boolean, score?: number }} [patch]
  */
@@ -161,7 +159,7 @@ function recordVisit(patch = {}) {
   if (!isConfigured) return;
 
   const body = {
-    p_visitor_id: getVisitorId(),
+    p_visit_id: getVisitId(),
     p_liked: patch.liked ?? null,
     p_score: patch.score ?? null,
   };
@@ -244,9 +242,8 @@ export async function diagnose() {
     보정된_엔드포인트: isConfigured ? endpoint : '(설정 없음)',
     anon키_길이: anonKey.length,
 
-    // 이 브라우저는 DB 에서 항상 이 한 행으로 취급된다.
-    // 혼자 테스트하면 행이 안 늘어나는 게 정상이라는 걸 여기서 확인할 수 있다.
-    이_브라우저의_방문자_id: readStore().visitorId ?? '(아직 없음)',
+    // 이번 방문은 DB 에서 이 한 행이다. 새로고침해도 같은 id, 탭을 닫으면 새 id.
+    이번_방문_id: getVisitId(),
 
     // 피드백 팝업이 왜 안 뜨는지도 여기서 바로 알 수 있어야 한다.
     피드백_상태: feedbackState,
@@ -290,7 +287,7 @@ export async function diagnose() {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: requestHeaders(),
-      body: JSON.stringify({ p_visitor_id: getVisitorId(), p_liked: null, p_score: null }),
+      body: JSON.stringify({ p_visit_id: getVisitId(), p_liked: null, p_score: null }),
     });
     const detail = await response.text().catch(() => '');
 
@@ -299,7 +296,7 @@ export async function diagnose() {
     report.성공 = response.ok;
 
     if (response.ok) {
-      console.log('[analytics] 테스트 전송 성공. 대시보드 visitors 테이블을 확인하세요.', report);
+      console.log('[analytics] 테스트 전송 성공. 대시보드 visits 테이블을 확인하세요.', report);
     } else {
       report.해결방법 = explainFailure(response.status, detail);
       console.error(
@@ -393,16 +390,12 @@ export function setFeedbackState(state) {
   }
 }
 
-/**
- * 이번 방문의 응답 기록을 지워서 팝업이 다시 뜨게 한다.
- * 예전 버전이 localStorage 에 남긴 값도 함께 정리한다.
- */
+/** 이번 방문의 응답 기록을 지워서 팝업이 다시 뜨게 한다. */
 export function resetFeedbackState() {
   try {
     window.sessionStorage.removeItem(FEEDBACK_STATE_KEY);
   } catch {
     // 무시
   }
-  updateStore({ feedbackState: undefined });
   console.log('[analytics] 피드백 상태를 초기화했습니다. 포즈를 3장 보면 팝업이 다시 뜹니다.');
 }
