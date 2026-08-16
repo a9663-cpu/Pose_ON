@@ -179,17 +179,44 @@ pose_images/          포즈 이미지 (54장 사용, 중복 2장 제외)
 
 ### 설정
 
-1. [supabase.com](https://supabase.com)에서 프로젝트 생성
-2. 대시보드 → **SQL Editor**에 [supabase/schema.sql](supabase/schema.sql) 전체를 붙여넣고 실행
-3. 대시보드 → **Project Settings → API**에서 `Project URL`과 `anon public` 키를 복사
-4. Vercel → **Project Settings → Environment Variables**에 등록
+**1. Supabase 프로젝트 생성** — [supabase.com](https://supabase.com)
 
-   | 이름 | 값 |
-   |---|---|
-   | `SUPABASE_URL` | `https://xxxxxxxx.supabase.co` |
-   | `SUPABASE_ANON_KEY` | anon public 키 |
+**2. 테이블 만들기** — 대시보드 → **SQL Editor** → [supabase/schema.sql](supabase/schema.sql) 전체 붙여넣고 Run.
+맨 아래 확인 쿼리가 `테이블_생성됨 = 1`, `정책_개수 = 1` 을 돌려주면 성공이다.
 
-5. 재배포 (환경변수는 **다음 빌드부터** 반영된다)
+**3. 값 두 개 복사** — 대시보드 → **Project Settings → API**
+
+| 화면에 적힌 이름 | 형태 |
+|---|---|
+| **Project URL** | `https://abcdefghijk.supabase.co` |
+| **Project API keys → `anon` `public`** | `eyJ...` 로 시작하는 긴 문자열 (또는 `sb_publishable_...`) |
+
+> ⚠️ 브라우저 주소창의 대시보드 URL(`https://supabase.com/dashboard/project/...`)이 아니다.
+> 그걸 넣으면 요청이 엉뚱한 서버로 가서 **404**가 난다. 반드시 `.supabase.co` 로 끝나는 값이어야 한다.
+
+**4. Vercel에 등록** — 프로젝트 → **Settings → Environment Variables**
+
+| Key | Value | Environments |
+|---|---|---|
+| `SUPABASE_URL` | 3번의 Project URL | Production · Preview · Development 전부 체크 |
+| `SUPABASE_ANON_KEY` | 3번의 anon 키 | 위와 동일 |
+
+**5. 재배포** — 환경변수는 **등록 이후의 빌드부터** 반영된다. 이미 배포된 것에는 적용되지 않는다.
+Deployments 탭 → 최신 배포 → ⋯ → **Redeploy**.
+
+**6. 빌드 로그 확인** — 배포 로그에 아래가 찍혀야 한다.
+
+```
+[build-config] ✓ URL  ← SUPABASE_URL = https://abcdefghijk.supabase.co
+[build-config] ✓ KEY  ← SUPABASE_ANON_KEY (208자)
+[build-config] src/config.js 생성 완료
+```
+
+`⚠ Supabase 환경변수를 찾지 못했습니다` 가 찍혔다면 4번이 안 된 것이고,
+`⚠ URL 형태가 이상합니다` 가 찍혔다면 3번에서 잘못된 값을 복사한 것이다.
+
+**7. 결과 확인** — 브라우저에서 `https://<배포도메인>/src/config.js` 를 연다.
+값이 채워져 있으면 성공. 빈 문자열이면 4~6단계 중 하나가 안 된 것이다.
 
 ### 환경변수가 브라우저까지 가는 방법
 
