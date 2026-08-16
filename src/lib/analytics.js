@@ -1,10 +1,14 @@
 /**
  * 익명 사용 기록 + 피드백 저장 (Supabase REST API).
  *
- * 서버에 저장하는 것은 딱 세 가지다.
- *   session_start   방문 1건        → "전체 방문자 수" 분모
- *   like / unlike   찜 버튼 클릭    → "한 번이라도 찜한 방문자 수"
- *   feedback        1~5점           → 피드백 데이터
+ * **방문자 한 명당 한 행**만 만든다. 행동할 때마다 행이 쌓이지 않고 같은 행을 덮어쓴다.
+ *   visitor_id  브라우저에서 만든 익명 UUID
+ *   liked       찜하기를 한 번이라도 눌렀는가 (true / false)
+ *   score       피드백 점수 1~5
+ *
+ * 저장은 테이블에 직접 쓰지 않고 `record_visit` 함수(RPC)를 호출한다.
+ * 그래야 테이블 자체는 RLS 로 완전히 잠가둘 수 있다. (supabase/schema.sql 참고)
+ *
  * 포즈를 몇 장 봤는지는 피드백 팝업 타이밍 판단용으로 브라우저 안에서만 센다.
  *
  * 설계 원칙
@@ -18,17 +22,14 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 
 const STORAGE_KEY = 'pose-on:analytics:v1';
-const EVENTS_ENDPOINT = '/rest/v1/events';
-
-/** @typedef {import('../data/poses.js').Pose} Pose */
-/** @typedef {{ people: number | null, mood: string | null }} Condition */
+const RECORD_ENDPOINT = '/rest/v1/rpc/record_visit';
 
 /**
  * 붙여넣은 URL 을 프로젝트 루트 주소로 정리한다.
  * Supabase 대시보드는 같은 프로젝트를 두 가지 형태로 보여줘서 둘 다 들어올 수 있다.
  *   https://xxx.supabase.co          ← Project URL
  *   https://xxx.supabase.co/rest/v1  ← RESTful endpoint
- * 뒤쪽을 그대로 쓰면 `/rest/v1/rest/v1/events` 가 되어 404 가 나므로 잘라낸다.
+ * 뒤쪽을 그대로 쓰면 `/rest/v1/rest/v1/...` 이 되어 404 가 나므로 잘라낸다.
  * 끝 슬래시도 함께 정리한다.
  *
  * ※ 같은 규칙이 scripts/build-config.mjs 에도 있다. 한쪽만 고치지 말 것.
@@ -48,7 +49,7 @@ const anonKey = SUPABASE_ANON_KEY.trim();
 const isConfigured = baseUrl.length > 0 && anonKey.length > 0;
 
 /** 실제로 요청이 날아가는 주소. 문제 생겼을 때 이 값부터 확인하면 된다. */
-const endpoint = `${baseUrl}${EVENTS_ENDPOINT}`;
+const endpoint = `${baseUrl}${RECORD_ENDPOINT}`;
 
 /**
  * crypto.randomUUID 는 보안 컨텍스트(https 또는 localhost)에서만 존재한다.
@@ -102,9 +103,6 @@ function getVisitorId() {
   return visitorId;
 }
 
-/** 이번 방문(페이지 로드) 단위 id */
-const sessionId = createUuid();
-
 // 예전 버전은 피드백 응답 여부를 localStorage 에 넣어 "평생 한 번"만 물었다.
 // 지금은 sessionStorage 로 옮겼으므로 남아 있는 값을 정리한다.
 // 이걸 안 지우면 예전 사용자에게는 계속 안 뜨는 것처럼 보인다.
@@ -119,29 +117,36 @@ if (readStore().feedbackState !== undefined) {
  */
 const viewedPoseIds = new Set();
 
-/**
- * @param {Record<string, unknown>} event
- */
 function requestHeaders() {
   return {
     'Content-Type': 'application/json',
     apikey: anonKey,
     Authorization: `Bearer ${anonKey}`,
-    // 응답 본문을 요구하지 않는다. RLS 가 INSERT 만 허용하므로 필수 설정이다.
+    // 함수는 결과를 돌려주지 않는다. 응답 본문을 요구하지 않는다.
     Prefer: 'return=minimal',
   };
 }
 
-function sendEvent(event) {
+/**
+ * record_visit 함수를 호출해 이 방문자의 행을 만들거나 갱신한다.
+ * 같은 방문자를 여러 번 호출해도 행은 하나뿐이다.
+ *
+ * @param {{ liked?: boolean, score?: number }} [patch]
+ */
+function recordVisit(patch = {}) {
   if (!isConfigured) return;
 
-  const row = { visitor_id: getVisitorId(), session_id: sessionId, ...event };
+  const body = {
+    p_visitor_id: getVisitorId(),
+    p_liked: patch.liked ?? null,
+    p_score: patch.score ?? null,
+  };
 
   try {
     fetch(endpoint, {
       method: 'POST',
       headers: requestHeaders(),
-      body: JSON.stringify(row),
+      body: JSON.stringify(body),
       keepalive: true,
     })
       .then(async (response) => {
@@ -162,17 +167,19 @@ function sendEvent(event) {
 
 /**
  * 실패 응답을 사람이 바로 조치할 수 있는 문장으로 바꾼다.
- * PostgREST 는 원인을 code 로 알려준다. (PGRST205 = 테이블 못 찾음, 42501 = RLS 거부)
+ * PostgREST 는 원인을 code 로 알려준다.
+ *   PGRST202 = 함수 못 찾음, PGRST205 = 테이블 못 찾음, 42501 = 권한 거부
  * @param {number} status
  * @param {string} detail 응답 본문
  */
 function explainFailure(status, detail) {
   // 404 는 원인이 두 갈래다. 응답 본문으로 갈라야 헛짚지 않는다.
   if (status === 404) {
-    if (detail.includes('PGRST205')) {
+    if (detail.includes('PGRST202') || detail.includes('PGRST205')) {
       return (
-        'PostgREST 에는 닿았지만 events 테이블을 못 찾습니다.\n' +
-        "  → 스키마 캐시가 낡았습니다. SQL Editor 에서: notify pgrst, 'reload schema';\n" +
+        'PostgREST 에는 닿았지만 record_visit 함수를 못 찾습니다.\n' +
+        '  → supabase/schema.sql 을 SQL Editor 에서 실행했는지 확인하세요.\n' +
+        "  → 실행했다면 스키마 캐시 문제입니다: notify pgrst, 'reload schema';\n" +
         '  → 그래도 안 되면 SQL 을 실행한 프로젝트와 위 엔드포인트의 프로젝트가 다른 것입니다.'
       );
     }
@@ -183,21 +190,17 @@ function explainFailure(status, detail) {
       '  → Project Settings → API 의 "Project URL" 값을 그대로 넣으세요.'
     );
   }
-  if (detail.includes('PGRST205')) {
-    return "스키마 캐시가 낡았습니다. SQL Editor 에서: notify pgrst, 'reload schema';";
-  }
   if (detail.includes('42501') || status === 403) {
     return (
-      'RLS 정책이 INSERT 를 막고 있습니다.\n' +
-      '  schema.sql 의 "anon can insert events" 정책이 만들어졌는지 확인하세요.\n' +
-      '  (Supabase → Authentication → Policies → events)'
+      'record_visit 함수 실행 권한이 없습니다.\n' +
+      '  schema.sql 의 grant execute ... to anon 구문까지 실행했는지 확인하세요.'
     );
   }
   if (status === 401) {
     return 'anon 키가 잘못됐습니다. Project Settings → API 의 anon public 키를 다시 확인하세요.';
   }
   if (status === 400) {
-    return '테이블 제약조건에 걸렸습니다. 응답 본문의 message 를 확인하세요.';
+    return '함수 인자나 제약조건에 걸렸습니다. 응답 본문의 message 를 확인하세요.';
   }
   return '응답 본문의 message 를 확인하세요.';
 }
@@ -245,7 +248,7 @@ export async function diagnose() {
     : '⚠ 이상함 — Project Settings → API 의 "Project URL" 값이 맞는지 확인하세요';
 
   // PostgREST 자체에 닿는지 먼저 확인한다.
-  // 여기가 404 면 주소가 틀린 것이고, 여기가 200 인데 INSERT 가 404 면 테이블/캐시 문제다.
+  // 여기가 404 면 주소가 틀린 것이고, 200 인데 함수 호출만 404 면 스키마/캐시 문제다.
   try {
     const probe = await fetch(`${baseUrl}/rest/v1/`, {
       headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
@@ -259,7 +262,7 @@ export async function diagnose() {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: requestHeaders(),
-      body: JSON.stringify({ visitor_id: getVisitorId(), session_id: sessionId, type: 'session_start' }),
+      body: JSON.stringify({ p_visitor_id: getVisitorId(), p_liked: null, p_score: null }),
     });
     const detail = await response.text().catch(() => '');
 
@@ -268,7 +271,7 @@ export async function diagnose() {
     report.성공 = response.ok;
 
     if (response.ok) {
-      console.log('[analytics] 테스트 전송 성공. 대시보드 events 테이블을 확인하세요.', report);
+      console.log('[analytics] 테스트 전송 성공. 대시보드 visitors 테이블을 확인하세요.', report);
     } else {
       report.해결방법 = explainFailure(response.status, detail);
       console.error(
@@ -289,14 +292,14 @@ export function isAnalyticsConfigured() {
   return isConfigured;
 }
 
-/** 앱이 뜰 때 한 번 호출한다. */
+/** 앱이 뜰 때 한 번 호출한다. 이 방문자의 행을 만들어 "전체 사용자 수"에 포함시킨다. */
 export function trackSessionStart() {
-  sendEvent({ type: 'session_start' });
+  recordVisit();
 }
 
 /**
  * 포즈 카드가 맨 앞에 올라왔을 때. 브라우저 안에서만 세고 서버로는 보내지 않는다.
- * @param {Pose} pose
+ * @param {import('../data/poses.js').Pose} pose
  */
 export function countPoseView(pose) {
   viewedPoseIds.add(pose.id);
@@ -307,19 +310,20 @@ export function getViewedPoseCount() {
   return viewedPoseIds.size;
 }
 
+/** 이번 방문에 찜 기록을 이미 보냈는지. 같은 내용을 반복해 보내지 않으려고 둔다. */
+let hasReportedLike = false;
+
 /**
- * 마음에 들어요 버튼을 눌렀을 때.
- * @param {Pose} pose
- * @param {Condition} condition
+ * 찜하기를 눌렀을 때 이 방문자를 "찜한 사용자(O)"로 표시한다.
+ * 한 번 O 가 되면 찜을 해제해도 O 로 남는다. "한 번이라도 눌렀는가"가 기준이기 때문이다.
+ * 그래서 해제(false)일 때는 아무것도 보내지 않는다.
+ *
  * @param {boolean} isSavedNow true 면 찜, false 면 해제
  */
-export function trackLike(pose, condition, isSavedNow) {
-  sendEvent({
-    type: isSavedNow ? 'like' : 'unlike',
-    pose_id: pose.id,
-    people: condition.people,
-    mood: condition.mood,
-  });
+export function trackLike(isSavedNow) {
+  if (!isSavedNow || hasReportedLike) return;
+  hasReportedLike = true;
+  recordVisit({ liked: true });
 }
 
 /**
@@ -327,7 +331,7 @@ export function trackLike(pose, condition, isSavedNow) {
  * @param {number} score 1~5
  */
 export function trackFeedback(score) {
-  sendEvent({ type: 'feedback', score });
+  recordVisit({ score });
 }
 
 /**

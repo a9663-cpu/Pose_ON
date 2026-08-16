@@ -37,9 +37,6 @@ export function createDeckScreen() {
   const { poses: matched, isExactMatch } = filterPoses(people, mood);
   const poses = shuffle(matched);
 
-  /** 기록에 함께 남길 현재 조건 */
-  const condition = { people, mood };
-
   let savedAction = savedCountButton({ count: getSavedCount(), onClick: () => navigate('#/saved') });
 
   function refreshSavedAction() {
@@ -108,7 +105,7 @@ export function createDeckScreen() {
       showToast('찜을 해제했어요');
     }
 
-    trackLike(pose, condition, isSavedNow);
+    trackLike(isSavedNow);
     poseDeck.syncSavedState();
     syncLikeButton(pose);
     refreshSavedAction();
