@@ -23,6 +23,21 @@ const THANKS_VISIBLE_MS = 1600;
 /** @type {{ element: HTMLElement, open: () => void } | null} */
 let popup = null;
 
+/**
+ * `?feedback=force` 를 붙여 접속하면 조건을 무시하고 즉시 띄운다.
+ * 배포 후 "팝업이 아예 안 뜬다" 는 상황에서, 렌더링 문제인지 조건 문제인지 가르는 용도다.
+ *   https://사이트/?feedback=force
+ *   https://사이트/#/deck?feedback=force   ← 해시 뒤에 붙여도 인식한다
+ */
+function isForcedOpen() {
+  try {
+    const target = `${window.location.search}&${window.location.hash}`;
+    return /[?&]feedback=force\b/.test(target);
+  } catch {
+    return false;
+  }
+}
+
 function createPopup() {
   const element = el('section', {
     class: 'feedback',
@@ -109,11 +124,20 @@ export function mountFeedbackPopup() {
   if (popup !== null) return;
   popup = createPopup();
   document.body.append(popup.element);
+
+  if (isForcedOpen()) {
+    console.log('[feedback] ?feedback=force 로 강제 노출합니다. 조건과 응답 기록을 무시합니다.');
+    popup.open();
+  }
 }
 
 /** 조건이 되면 팝업을 띄운다. 조건이 아니면 아무 일도 하지 않는다. */
 export function requestFeedbackPopup() {
   if (popup === null) return;
+  if (isForcedOpen()) {
+    popup.open();
+    return;
+  }
   if (getFeedbackState() !== 'pending') return;
   if (getViewedPoseCount() < MIN_VIEWED_POSES_BEFORE_ASKING) return;
   popup.open();
