@@ -201,12 +201,24 @@ function explainFailure(status, detail) {
  * @returns {Promise<Record<string, unknown>>}
  */
 export async function diagnose() {
+  const feedbackState = getFeedbackState();
+
   /** @type {Record<string, unknown>} */
   const report = {
     설정됨: isConfigured,
     SUPABASE_URL: SUPABASE_URL === '' ? '(비어 있음)' : SUPABASE_URL,
     보정된_엔드포인트: isConfigured ? endpoint : '(설정 없음)',
     anon키_길이: anonKey.length,
+
+    // 피드백 팝업이 왜 안 뜨는지도 여기서 바로 알 수 있어야 한다.
+    피드백_상태: feedbackState,
+    이번_방문에_본_포즈: viewedPoseIds.size,
+    팝업_노출조건:
+      feedbackState !== 'pending'
+        ? `✗ 이미 ${feedbackState === 'submitted' ? '응답함' : '닫음'} — poseOnResetFeedback() 실행 후 새로고침하면 다시 뜹니다`
+        : viewedPoseIds.size >= 3
+          ? '✓ 조건 충족 (덱 화면에서 카드가 바뀌는 순간 뜹니다)'
+          : `아직 ${viewedPoseIds.size}장 — 포즈를 3장 봐야 뜹니다`,
   };
 
   if (!isConfigured) {
@@ -320,4 +332,14 @@ export function getFeedbackState() {
 /** @param {'submitted' | 'dismissed'} state */
 export function setFeedbackState(state) {
   updateStore({ feedbackState: state });
+}
+
+/**
+ * 피드백 응답 기록을 지워서 팝업이 다시 뜨게 한다.
+ * 팝업은 방문자당 한 번만 뜨도록 되어 있어서, 한 번 답하거나 닫으면
+ * 같은 브라우저에서는 다시 볼 수 없다. 테스트할 때 쓰라고 열어둔다.
+ */
+export function resetFeedbackState() {
+  updateStore({ feedbackState: 'pending' });
+  console.log('[analytics] 피드백 상태를 초기화했습니다. 새로고침 후 포즈를 3장 보면 팝업이 다시 뜹니다.');
 }
