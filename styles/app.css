@@ -334,11 +334,6 @@ html[data-screen='deck'] body {
   margin-bottom: var(--space-md);
 }
 
-.home__sub {
-  color: var(--color-body-muted);
-  max-width: 32ch;
-}
-
 .home__actions {
   margin-top: auto;
   display: flex;

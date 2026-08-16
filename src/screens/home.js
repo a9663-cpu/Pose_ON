@@ -33,11 +33,7 @@ export function createHomeScreen() {
       ]),
       el('p', {
         class: 'home__copy t-lead',
-        text: '무슨 포즈 하지? 고민하는 10초를 없애드려요.',
-      }),
-      el('p', {
-        class: 'home__sub t-body',
-        text: '인원 수와 무드만 고르면 바로 따라할 수 있는 포즈를 보여드려요.',
+        text: '무슨 포즈 하지? 고민을 없애드려요.',
       }),
     ]),
 
