@@ -93,13 +93,37 @@ function updateStore(patch) {
   }
 }
 
-/** 브라우저에 한 번만 만들어 두고 계속 재사용하는 익명 방문자 id */
+/**
+ * 브라우저에 한 번만 만들어 두고 계속 재사용하는 익명 방문자 id.
+ *
+ * 이 값이 그대로이기 때문에 같은 브라우저에서 몇 번을 다시 들어와도
+ * DB 에는 그 사람 행 하나만 유지된다. ("1명당 id 1개")
+ * 그래서 혼자 테스트하면 행이 계속 1개로 보이는 게 정상이다.
+ * 새 사람인 척하려면 poseOnNewVisitor() 로 id 를 새로 만들면 된다.
+ */
 function getVisitorId() {
   const stored = readStore().visitorId;
   if (typeof stored === 'string' && stored.length > 0) return stored;
 
   const visitorId = createUuid();
   updateStore({ visitorId });
+  return visitorId;
+}
+
+/**
+ * 방문자 id 를 새로 발급해 "다른 사람"으로 만든다. 테스트용.
+ * 실제 사용자는 각자 브라우저가 다르므로 이 함수를 쓸 일이 없다.
+ * @returns {string} 새로 만들어진 id
+ */
+export function resetVisitorId() {
+  const visitorId = createUuid();
+  updateStore({ visitorId });
+  hasReportedLike = false;
+  recordVisit();
+  console.log(
+    `[analytics] 새 방문자로 바꿨습니다: ${visitorId}\n` +
+      '  다음 찜/피드백은 새 행에 기록됩니다. (기존 행은 그대로 남습니다)',
+  );
   return visitorId;
 }
 
@@ -219,6 +243,10 @@ export async function diagnose() {
     SUPABASE_URL: SUPABASE_URL === '' ? '(비어 있음)' : SUPABASE_URL,
     보정된_엔드포인트: isConfigured ? endpoint : '(설정 없음)',
     anon키_길이: anonKey.length,
+
+    // 이 브라우저는 DB 에서 항상 이 한 행으로 취급된다.
+    // 혼자 테스트하면 행이 안 늘어나는 게 정상이라는 걸 여기서 확인할 수 있다.
+    이_브라우저의_방문자_id: readStore().visitorId ?? '(아직 없음)',
 
     // 피드백 팝업이 왜 안 뜨는지도 여기서 바로 알 수 있어야 한다.
     피드백_상태: feedbackState,
