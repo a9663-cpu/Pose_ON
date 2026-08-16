@@ -140,8 +140,39 @@ function sendEvent(event) {
 }
 
 /**
+ * 실패 응답을 사람이 바로 조치할 수 있는 문장으로 바꾼다.
+ * PostgREST 는 원인을 code 로 알려준다. (PGRST205 = 테이블 못 찾음, 42501 = RLS 거부)
+ * @param {number} status
+ * @param {string} detail 응답 본문
+ */
+function explainFailure(status, detail) {
+  if (detail.includes('PGRST205') || status === 404) {
+    return (
+      'events 테이블을 찾지 못했습니다. 아래를 순서대로 확인하세요.\n' +
+      '  1) supabase/schema.sql 을 SQL Editor 에서 실행했는가\n' +
+      '  2) 실행한 프로젝트와 위 엔드포인트 주소의 프로젝트가 같은가\n' +
+      "  3) 실행했는데도 404 라면 스키마 캐시 문제다. SQL Editor 에서: notify pgrst, 'reload schema';"
+    );
+  }
+  if (detail.includes('42501') || status === 403) {
+    return (
+      'RLS 정책이 INSERT 를 막고 있습니다.\n' +
+      '  schema.sql 의 "anon can insert events" 정책이 만들어졌는지 확인하세요.\n' +
+      '  (Supabase → Authentication → Policies → events)'
+    );
+  }
+  if (status === 401) {
+    return 'anon 키가 잘못됐습니다. Project Settings → API 의 anon public 키를 다시 확인하세요.';
+  }
+  if (status === 400) {
+    return '테이블 제약조건에 걸렸습니다. 응답 본문의 message 를 확인하세요.';
+  }
+  return '응답 본문의 message 를 확인하세요.';
+}
+
+/**
  * 브라우저 콘솔에서 `poseOnDiagnose()` 로 실행하는 진단 도구.
- * 설정값과 테스트 전송 결과(HTTP 상태 + 응답 본문)를 그대로 보여준다.
+ * 설정값과 테스트 전송 결과(HTTP 상태 + 응답 본문 + 원인 설명)를 보여준다.
  * @returns {Promise<Record<string, unknown>>}
  */
 export async function diagnose() {
@@ -178,7 +209,11 @@ export async function diagnose() {
     if (response.ok) {
       console.log('[analytics] 테스트 전송 성공. 대시보드 events 테이블을 확인하세요.', report);
     } else {
-      console.error('[analytics] 테스트 전송 실패', report);
+      report.해결방법 = explainFailure(response.status, detail);
+      console.error(
+        `[analytics] 테스트 전송 실패 ${report.status}\n${report.해결방법}`,
+        report,
+      );
     }
   } catch (error) {
     report.성공 = false;

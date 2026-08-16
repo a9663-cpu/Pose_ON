@@ -52,6 +52,19 @@ create policy "anon can insert events"
   with check (true);
 
 
+-- ── 실행 직후 확인 ──────────────────────────────────────────
+-- 아래를 함께 실행해서 결과가 나오면 테이블과 정책이 제대로 만들어진 것이다.
+select
+  (select count(*) from information_schema.tables
+    where table_schema = 'public' and table_name = 'events')  as 테이블_생성됨,
+  (select count(*) from pg_policies
+    where schemaname = 'public' and tablename = 'events')     as 정책_개수;
+
+-- 위 결과가 1, 1 인데도 앱에서 404(PGRST205)가 난다면 PostgREST 스키마 캐시가 낡은 것이다.
+-- 아래 한 줄을 실행하면 즉시 갱신된다.
+notify pgrst, 'reload schema';
+
+
 -- ============================================================
 --  지표 조회 쿼리 — 필요할 때 SQL Editor 에서 실행
 -- ============================================================
