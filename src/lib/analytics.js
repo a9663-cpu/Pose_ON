@@ -105,6 +105,13 @@ function getVisitorId() {
 /** 이번 방문(페이지 로드) 단위 id */
 const sessionId = createUuid();
 
+// 예전 버전은 피드백 응답 여부를 localStorage 에 넣어 "평생 한 번"만 물었다.
+// 지금은 sessionStorage 로 옮겼으므로 남아 있는 값을 정리한다.
+// 이걸 안 지우면 예전 사용자에게는 계속 안 뜨는 것처럼 보인다.
+if (readStore().feedbackState !== undefined) {
+  updateStore({ feedbackState: undefined });
+}
+
 /**
  * 이번 세션에 본 포즈. 순환해서 같은 포즈를 다시 만나도 한 번만 센다.
  * 이 값은 피드백 팝업을 언제 띄울지 판단하는 데만 쓰고 서버로 보내지 않는다.
@@ -215,7 +222,7 @@ export async function diagnose() {
     이번_방문에_본_포즈: viewedPoseIds.size,
     팝업_노출조건:
       feedbackState !== 'pending'
-        ? `✗ 이미 ${feedbackState === 'submitted' ? '응답함' : '닫음'} — poseOnResetFeedback() 실행 후 새로고침하면 다시 뜹니다`
+        ? `✗ 이번 방문에 이미 ${feedbackState === 'submitted' ? '응답함' : '닫음'} — 탭을 닫았다 열면 다시 묻습니다 (또는 poseOnResetFeedback())`
         : viewedPoseIds.size >= 3
           ? '✓ 조건 충족 (덱 화면에서 카드가 바뀌는 순간 뜹니다)'
           : `아직 ${viewedPoseIds.size}장 — 포즈를 3장 봐야 뜹니다`,
@@ -323,23 +330,47 @@ export function trackFeedback(score) {
   sendEvent({ type: 'feedback', score });
 }
 
+/**
+ * 피드백 응답 여부는 **sessionStorage** 에 담는다. 즉 "방문마다 한 번" 묻는다.
+ *
+ *   - 화면을 옮기거나 새로고침해도 다시 묻지 않는다 (한 방문 안에서는 한 번뿐)
+ *   - 탭이나 브라우저를 닫았다 다시 오면 새 방문이므로 다시 묻는다
+ *
+ * 질문이 "오늘 실제 촬영에 도움이 되었나요?" 이므로 촬영할 때마다 물어야 맞다.
+ * localStorage 에 넣으면 평생 한 번만 묻게 되어 질문과 앞뒤가 안 맞는다.
+ * (방문자 id 는 방문자 수를 세야 하므로 계속 localStorage 에 남는다)
+ */
+const FEEDBACK_STATE_KEY = 'pose-on:feedback:v1';
+
 /** @returns {'pending' | 'submitted' | 'dismissed'} */
 export function getFeedbackState() {
-  const state = readStore().feedbackState;
-  return state === 'submitted' || state === 'dismissed' ? state : 'pending';
+  try {
+    const state = window.sessionStorage.getItem(FEEDBACK_STATE_KEY);
+    return state === 'submitted' || state === 'dismissed' ? state : 'pending';
+  } catch {
+    return 'pending';
+  }
 }
 
 /** @param {'submitted' | 'dismissed'} state */
 export function setFeedbackState(state) {
-  updateStore({ feedbackState: state });
+  try {
+    window.sessionStorage.setItem(FEEDBACK_STATE_KEY, state);
+  } catch {
+    // 저장이 막혀도 이번 화면 이동 동안은 팝업이 닫힌 채로 유지된다.
+  }
 }
 
 /**
- * 피드백 응답 기록을 지워서 팝업이 다시 뜨게 한다.
- * 팝업은 방문자당 한 번만 뜨도록 되어 있어서, 한 번 답하거나 닫으면
- * 같은 브라우저에서는 다시 볼 수 없다. 테스트할 때 쓰라고 열어둔다.
+ * 이번 방문의 응답 기록을 지워서 팝업이 다시 뜨게 한다.
+ * 예전 버전이 localStorage 에 남긴 값도 함께 정리한다.
  */
 export function resetFeedbackState() {
-  updateStore({ feedbackState: 'pending' });
-  console.log('[analytics] 피드백 상태를 초기화했습니다. 새로고침 후 포즈를 3장 보면 팝업이 다시 뜹니다.');
+  try {
+    window.sessionStorage.removeItem(FEEDBACK_STATE_KEY);
+  } catch {
+    // 무시
+  }
+  updateStore({ feedbackState: undefined });
+  console.log('[analytics] 피드백 상태를 초기화했습니다. 포즈를 3장 보면 팝업이 다시 뜹니다.');
 }
