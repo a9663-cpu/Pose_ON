@@ -33,7 +33,7 @@ export function createHomeScreen() {
       ]),
       el('p', {
         class: 'home__copy t-lead',
-        text: '무슨 포즈 하지? 고민을 없애드려요.',
+        text: '어떤 포즈 할까?',
       }),
     ]),
 
