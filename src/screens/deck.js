@@ -12,6 +12,8 @@ import {
   heartIcon,
 } from '../components/ui.js';
 import { createPoseDeck } from '../components/poseDeck.js';
+import { requestFeedbackPopup } from '../components/feedbackPopup.js';
+import { countPoseView, trackLike } from '../lib/analytics.js';
 import { filterPoses, peopleLabel, moodLabel } from '../data/poses.js';
 import {
   getPeople,
@@ -34,6 +36,9 @@ export function createDeckScreen() {
   const mood = /** @type {import('../data/poses.js').MoodId} */ (getMood());
   const { poses: matched, isExactMatch } = filterPoses(people, mood);
   const poses = shuffle(matched);
+
+  /** 기록에 함께 남길 현재 조건 */
+  const condition = { people, mood };
 
   let savedAction = savedCountButton({ count: getSavedCount(), onClick: () => navigate('#/saved') });
 
@@ -94,14 +99,16 @@ export function createDeckScreen() {
     const pose = poseDeck.getTopPose();
     if (pose === null) return;
 
-    if (isSaved(pose.id)) {
-      removeSaved(pose.id);
-      showToast('찜을 해제했어요');
-    } else {
+    const isSavedNow = !isSaved(pose.id);
+    if (isSavedNow) {
       addSaved(pose.id);
       showToast('찜한 포즈에 담았어요');
+    } else {
+      removeSaved(pose.id);
+      showToast('찜을 해제했어요');
     }
 
+    trackLike(pose, condition, isSavedNow);
     poseDeck.syncSavedState();
     syncLikeButton(pose);
     refreshSavedAction();
@@ -113,6 +120,10 @@ export function createDeckScreen() {
     onTopChange: (pose, position, total) => {
       counter.textContent = `${position} / ${total}`;
       syncLikeButton(pose);
+
+      // 서비스를 충분히 써 본 뒤에만 피드백을 묻는다. 조건이 안 되면 아무 일도 없다.
+      countPoseView(pose);
+      requestFeedbackPopup();
     },
   });
 

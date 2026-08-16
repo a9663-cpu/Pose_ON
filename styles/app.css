@@ -308,7 +308,7 @@ html[data-screen='deck'] body {
 /* ── 첫 화면 ──────────────────────────────────────────── */
 .screen--home {
   padding: calc(var(--space-xxl) + env(safe-area-inset-top)) var(--space-lg)
-    calc(var(--space-xl) + env(safe-area-inset-bottom));
+    calc(var(--space-xl) + env(safe-area-inset-bottom) + var(--feedback-height));
   background: var(--color-surface-tile-1);
   color: var(--color-on-dark);
 }
@@ -382,7 +382,7 @@ html[data-screen='deck'] body {
 
 .setup__footer {
   position: sticky;
-  bottom: 0;
+  bottom: var(--feedback-height);
   padding: var(--space-md) var(--space-lg) calc(var(--space-md) + env(safe-area-inset-bottom));
   background: rgba(245, 245, 247, 0.8);
   backdrop-filter: saturate(180%) blur(20px);
@@ -392,7 +392,10 @@ html[data-screen='deck'] body {
 /* ── 포즈 추천 화면 ───────────────────────────────────── */
 .screen--deck {
   height: 100vh;
-  height: 100dvh;
+  /* 피드백 팝업이 열리면 그만큼 덱을 줄여서 버튼이 가려지지 않게 한다 */
+  height: calc(100dvh - var(--feedback-height));
+  /* .screen 의 min-height: 100dvh 가 위 height 를 눌러버리므로 여기서 풀어준다 */
+  min-height: 0;
   overflow: hidden;
   background: var(--color-surface-tile-3);
   color: var(--color-on-dark);
@@ -597,7 +600,8 @@ html[data-screen='deck'] body {
 
 .saved__body {
   flex: 1;
-  padding: var(--space-lg) var(--space-lg) calc(var(--space-xxl) + env(safe-area-inset-bottom));
+  padding: var(--space-lg) var(--space-lg)
+    calc(var(--space-xxl) + env(safe-area-inset-bottom) + var(--feedback-height));
 }
 
 .saved-list {
@@ -659,11 +663,123 @@ html[data-screen='deck'] body {
   transform: scale(0.95);
 }
 
+/* ── 피드백 마이크로 팝업 ─────────────────────────────── */
+/* 어두운 덱 화면 위로 밝은 타일이 올라오는 구성. 색이 바뀌는 것 자체가 구분선이다. */
+.feedback {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 90;
+  width: 100%;
+  max-width: var(--app-max-width);
+  padding: var(--space-md) var(--space-lg) calc(var(--space-md) + env(safe-area-inset-bottom));
+  background: rgba(245, 245, 247, 0.94);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  color: var(--color-ink);
+  visibility: hidden;
+  transform: translate(-50%, 110%);
+  transition: transform 420ms var(--ease-standard), visibility 420ms var(--ease-standard);
+}
+
+.feedback.is-open {
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+.feedback__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.feedback__question {
+  margin: 0;
+}
+
+.feedback__close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin: -6px -8px 0 0;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-full);
+  color: var(--color-ink-muted-48);
+  font-size: var(--text-caption-size);
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard);
+}
+
+.feedback__close:active {
+  transform: scale(0.9);
+}
+
+.feedback__scores {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.feedback__score {
+  flex: 1;
+  min-height: 44px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  font-family: var(--font-text);
+  font-size: var(--text-body-size);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard), background-color 150ms var(--ease-standard),
+    border-color 150ms var(--ease-standard), color 150ms var(--ease-standard);
+}
+
+.feedback__score:active {
+  transform: scale(0.95);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.feedback__score:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
+}
+
+.feedback__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-xs);
+  color: var(--color-ink-muted-48);
+}
+
+.feedback__thanks {
+  display: none;
+  margin: 0;
+  padding: var(--space-sm) 0;
+  text-align: center;
+}
+
+.feedback.is-thanks .feedback__head,
+.feedback.is-thanks .feedback__form {
+  display: none;
+}
+
+.feedback.is-thanks .feedback__thanks {
+  display: block;
+}
+
 /* ── 토스트 ───────────────────────────────────────────── */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(96px + env(safe-area-inset-bottom));
+  bottom: calc(96px + env(safe-area-inset-bottom) + var(--feedback-height));
   z-index: 100;
   padding: 11px 22px;
   font-size: var(--text-caption-size);

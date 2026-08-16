@@ -78,6 +78,9 @@ py -m http.server 5173
 ```
 index.html
 start.bat
+vercel.json           배포 설정 (빌드 시 환경변수 → src/config.js 주입)
+scripts/
+  build-config.mjs    환경변수를 읽어 src/config.js 를 생성 (Vercel 빌드에서만 실행)
 styles/
   tokens.css          DESIGN_apple.md 를 그대로 옮긴 디자인 토큰 (색/타이포/여백/라운드)
   app.css             화면 스타일
@@ -85,18 +88,22 @@ src/
   main.js             진입점 — 라우트 등록
   router.js           해시 라우터 (+ 화면 destroy 정리)
   state.js            조건 · 찜 목록 상태 (localStorage 영속)
+  config.js           Supabase 연결 정보 (배포 시 자동 생성됨. 저장소에는 빈 값)
   data/poses.js       ★ 포즈 데이터 — 이미지 추가/교체는 여기만 고치면 된다
   lib/
     dom.js            el() 헬퍼 · shuffle · clamp · toast
     spring.js         스프링 물리 시뮬레이터
     storage.js        localStorage 래퍼 (접근 실패해도 앱이 죽지 않는다)
+    analytics.js      익명 사용 기록 · 피드백 전송 (Supabase REST)
   components/
     ui.js             topBar · pillButton · optionCard · progress · emptyState
     choiceScreen.js   "질문 + 선택 카드 + 하단 CTA" 화면 (인원/무드 공용)
     poseDeck.js       스와이프 카드 덱
+    feedbackPopup.js  하단 1문항 마이크로 피드백 팝업
   screens/
     home.js  people.js  mood.js  deck.js  saved.js
-pose_images/          포즈 이미지 (36장 사용, 중복 2장 제외)
+supabase/schema.sql   테이블 · RLS 정책 · 지표 조회 쿼리
+pose_images/          포즈 이미지 (54장 사용, 중복 2장 제외)
 ```
 
 ---
@@ -136,6 +143,81 @@ pose_images/          포즈 이미지 (36장 사용, 중복 2장 제외)
 
 ---
 
+## 사용 기록 · 피드백 (Supabase)
+
+### 무엇을 기록하나
+
+| 이벤트 | 언제 | 함께 담기는 값 |
+|---|---|---|
+| `session_start` | 앱이 뜰 때 1회 | — |
+| `like` / `unlike` | 마음에 들어요 버튼으로 찜 / 해제할 때 | `pose_id`, `people`, `mood` |
+| `feedback` | 팝업에서 점수를 고를 때 | `score` (1~5) |
+
+방문자 식별은 브라우저에서 만든 **무작위 UUID 하나**뿐이다. 이름·이메일·IP 등 개인정보는 수집하지 않는다.
+
+`session_start`는 요청에 없던 항목이지만 넣어뒀다. "찜한 방문자 수"만 있으면 30명이 많은 건지 적은 건지 알 수 없어서, 분모가 될 전체 방문자 수를 방문당 1행으로 남긴다. 필요 없으면 [src/main.js](src/main.js)의 `trackSessionStart()` 한 줄만 지우면 된다.
+
+포즈를 몇 장 봤는지는 **저장하지 않는다.** 피드백 팝업을 언제 띄울지 판단하는 용도로 브라우저 안에서만 센다.
+
+### 피드백 팝업
+
+- 질문: **"오늘 실제 촬영에 도움이 되었나요?"** — 1~5점 한 번 탭으로 끝.
+- **포즈 카드를 3장 이상 본 방문자에게만** 뜬다. 들어오자마자 물으면 "실제 촬영에 도움이 되었나"에 답할 근거가 없기 때문이다. 기준값은 `feedbackPopup.js`의 `MIN_VIEWED_POSES_BEFORE_ASKING`.
+- 방문자당 한 번만 뜬다. 답했거나(`submitted`) 닫으면(`dismissed`) 다시 뜨지 않는다.
+- 팝업이 열리면 그 높이만큼(`--feedback-height`) 화면 아래를 비워서 **마음에 들어요 버튼을 가리지 않는다.**
+
+### 설정
+
+1. [supabase.com](https://supabase.com)에서 프로젝트 생성
+2. 대시보드 → **SQL Editor**에 [supabase/schema.sql](supabase/schema.sql) 전체를 붙여넣고 실행
+3. 대시보드 → **Project Settings → API**에서 `Project URL`과 `anon public` 키를 복사
+4. Vercel → **Project Settings → Environment Variables**에 등록
+
+   | 이름 | 값 |
+   |---|---|
+   | `SUPABASE_URL` | `https://xxxxxxxx.supabase.co` |
+   | `SUPABASE_ANON_KEY` | anon public 키 |
+
+5. 재배포 (환경변수는 **다음 빌드부터** 반영된다)
+
+### 환경변수가 브라우저까지 가는 방법
+
+이 프로젝트는 빌드 없는 정적 사이트라서 브라우저가 `process.env`를 볼 수 없다. Vercel 환경변수는 **빌드 시점에만** 존재하므로, 빌드할 때 값을 파일로 구워 넣는다.
+
+```
+Vercel 환경변수
+      │  vercel.json  → buildCommand: node scripts/build-config.mjs
+      ▼
+scripts/build-config.mjs   환경변수를 읽어
+      ▼
+src/config.js              값이 채워진 상태로 덮어씀
+      ▼
+src/lib/analytics.js       import 해서 사용
+```
+
+- 저장소의 [src/config.js](src/config.js)는 **계속 빈 값으로 두는 게 정상이다.** 배포 때만 채워진다.
+- 환경변수가 없으면 빈 값으로 생성되고 빌드 로그에 경고가 남는다. 앱은 기록 전송만 생략한 채 정상 동작한다.
+- 로컬에서 기록까지 테스트하려면 `src/config.js`에 값을 잠깐 넣었다가 **커밋 전에 반드시 다시 비운다.**
+
+> **anon 키를 공개 저장소에 올려도 되나?**
+> 된다. anon 키는 원래 브라우저에 노출되도록 설계된 공개 키다. 데이터를 지키는 건 키가 아니라 **RLS 정책**이다. `schema.sql`은 익명 사용자에게 `INSERT`만 허용하고 `SELECT` 정책은 만들지 않으므로, 키를 아는 사람도 저장된 데이터를 읽거나 지울 수 없다. 본인은 대시보드(service_role)로 조회하면 된다. **그 SQL을 실행하지 않은 채 키만 넣으면 안 된다.**
+
+`config.js`가 비어 있으면 전송이 전부 조용히 생략된다. 팝업을 포함한 서비스 동작은 그대로라 로컬 개발에 지장이 없다.
+
+### 지표 조회
+
+두 지표 모두 `events` 테이블 하나에서 뽑는다. 바로 쓸 수 있는 SQL을 [supabase/schema.sql](supabase/schema.sql) 하단에 주석으로 넣어뒀다.
+
+1. **한 번이라도 마음에 들어요를 누른 방문자 수** (+ 전체 방문자 대비 비율)
+2. **피드백 점수 분포**와 평균
+3. (보너스) 어떤 포즈가 많이 찜됐는지 — `like` 이벤트에 `pose_id`가 함께 담긴다
+
+### 한계
+
+- 기록 전송은 fire-and-forget이다. 실패해도 재시도하지 않는다(서비스 동작이 먼저다).
+- RLS로 읽기는 막혀 있지만 **쓰기 남용(스팸 INSERT)은 막지 못한다.** 공개 배포 후 문제가 되면 Supabase Edge Function을 앞에 두고 rate limit을 거는 방식으로 바꿔야 한다.
+- 광고·추적 차단기가 있으면 기록이 누락될 수 있다. 절대값보다 추세로 볼 것.
+
 ## 디자인 — DESIGN_apple.md 적용
 
 - **단일 액센트**: 모든 인터랙티브 요소는 Action Blue `#0066cc` 하나. 어두운 화면에서는 Sky Link Blue `#2997ff`로만 바꾼다. 두 번째 브랜드 컬러는 없다.
@@ -165,6 +247,11 @@ pose_images/          포즈 이미지 (36장 사용, 중복 2장 제외)
 - 찜 화면 저장/해제, 설정 화면 선택 상태와 CTA 활성화
 - 320×568(아이폰 SE급) ~ 430×932 구간 레이아웃, 가로 오버플로 없음
 - 콘솔 에러 / 미처리 예외 없음
+- 피드백 팝업: 1·2장에서는 안 뜨고 3장째에 뜸, 4점 제출 → 감사 문구 → 자동 닫힘, 재요청해도 다시 안 뜸
+- 팝업이 열려도 마음에 들어요 버튼이 가려지지 않음 (버튼 bottom 605 < 팝업 top 650)
+- 로컬 목 서버로 실제 전송 payload 확인 — `session_start` / `pose_view` ×3 / `feedback(score=4)` / `like` 가 올바른 헤더(`apikey`, `Bearer`, `Prefer: return=minimal`)로 `/rest/v1/events` 에 전송됨
+- `config.js`가 비어 있을 때도 앱이 정상 렌더링되고 전송만 생략됨
+- 빌드로 생성되는 `config.js`가 따옴표·역슬래시가 섞인 키에서도 유효한 ES 모듈로 파싱되고, 그 값이 요청 헤더에 그대로 실려 나감
 
 ## 알려진 제약 · 다음 단계
 

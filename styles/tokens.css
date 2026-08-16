@@ -82,6 +82,8 @@
   /* ── Layout ─────────────────────────────────────────── */
   --app-max-width: 480px;
   --nav-height: 52px;
+  /* 피드백 팝업이 열려 있는 동안 화면 아래쪽에 비워 둘 높이. JS가 실제 높이로 바꾼다. */
+  --feedback-height: 0px;
 }
 
 /* ── Typography utility classes ───────────────────────── */
