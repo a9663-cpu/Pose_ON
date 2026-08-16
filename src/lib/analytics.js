@@ -24,11 +24,25 @@ const EVENTS_ENDPOINT = '/rest/v1/events';
 /** @typedef {{ people: number | null, mood: string | null }} Condition */
 
 /**
- * Supabase 대시보드에서 URL 을 복사하면 끝에 `/` 가 붙어 오는 경우가 많다.
- * 그대로 두면 `https://xxx.supabase.co//rest/v1/events` 처럼 슬래시가 겹쳐 404 가 난다.
- * 공백과 끝 슬래시를 여기서 한 번에 정리한다.
+ * 붙여넣은 URL 을 프로젝트 루트 주소로 정리한다.
+ * Supabase 대시보드는 같은 프로젝트를 두 가지 형태로 보여줘서 둘 다 들어올 수 있다.
+ *   https://xxx.supabase.co          ← Project URL
+ *   https://xxx.supabase.co/rest/v1  ← RESTful endpoint
+ * 뒤쪽을 그대로 쓰면 `/rest/v1/rest/v1/events` 가 되어 404 가 나므로 잘라낸다.
+ * 끝 슬래시도 함께 정리한다.
+ *
+ * ※ 같은 규칙이 scripts/build-config.mjs 에도 있다. 한쪽만 고치지 말 것.
+ * @param {string} value
  */
-const baseUrl = SUPABASE_URL.trim().replace(/\/+$/, '');
+function normalizeSupabaseUrl(value) {
+  return value
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/rest\/v1$/i, '')
+    .replace(/\/+$/, '');
+}
+
+const baseUrl = normalizeSupabaseUrl(SUPABASE_URL);
 const anonKey = SUPABASE_ANON_KEY.trim();
 
 const isConfigured = baseUrl.length > 0 && anonKey.length > 0;

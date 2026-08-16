@@ -49,8 +49,26 @@ function pickEnv(names) {
 
 const picked = { url: pickEnv(URL_ENV_NAMES), key: pickEnv(KEY_ENV_NAMES) };
 
-// 대시보드에서 복사하면 끝에 슬래시가 붙어 오는 경우가 많아 여기서 정리한다.
-const supabaseUrl = picked.url.value.replace(/\/+$/, '');
+/**
+ * 붙여넣은 URL 을 프로젝트 루트 주소로 정리한다.
+ * Supabase 대시보드는 같은 프로젝트를 두 가지 형태로 보여줘서 둘 다 들어올 수 있다.
+ *   https://xxx.supabase.co          ← Project URL
+ *   https://xxx.supabase.co/rest/v1  ← RESTful endpoint
+ * 뒤쪽을 그대로 쓰면 `/rest/v1/rest/v1/events` 가 되어 404 가 난다.
+ *
+ * ※ 같은 규칙이 src/lib/analytics.js 에도 있다. 한쪽만 고치지 말 것.
+ * @param {string} value
+ */
+function normalizeSupabaseUrl(value) {
+  return value
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/rest\/v1$/i, '')
+    .replace(/\/+$/, '');
+}
+
+const rawUrl = picked.url.value;
+const supabaseUrl = normalizeSupabaseUrl(rawUrl);
 const supabaseAnonKey = picked.key.value;
 
 if (supabaseUrl === '' || supabaseAnonKey === '') {
@@ -62,6 +80,10 @@ if (supabaseUrl === '' || supabaseAnonKey === '') {
   // 키는 로그에 남기지 않는다. 어떤 이름을 썼는지와 URL 만 남긴다.
   console.log(`[build-config] ✓ URL  ← ${picked.url.name} = ${supabaseUrl}`);
   console.log(`[build-config] ✓ KEY  ← ${picked.key.name} (${supabaseAnonKey.length}자)`);
+
+  if (supabaseUrl !== rawUrl) {
+    console.log(`[build-config]   (입력값 "${rawUrl}" 을 프로젝트 루트 주소로 정리했습니다)`);
+  }
 
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(supabaseUrl)) {
     console.warn(
