@@ -1,0 +1,737 @@
+/* ─────────────────────────────────────────────────────────
+   Pose ON — 화면 스타일
+   모바일 우선. 데스크톱에서는 480px 폭으로 가운데 정렬된다.
+   ───────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--color-canvas-parchment);
+}
+
+body {
+  font-family: var(--font-text);
+  font-size: var(--text-body-size);
+  line-height: 1.47;
+  letter-spacing: -0.022em;
+  color: var(--color-ink);
+  background: inherit;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+}
+
+img {
+  max-width: 100%;
+}
+
+p,
+h1,
+h2 {
+  margin: 0;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 화면별 배경 — DESIGN_apple.md 의 "밝은 타일 ↔ 어두운 타일 교차" 를 화면 단위로 적용 */
+html[data-screen='home'] {
+  background: var(--color-surface-tile-1);
+}
+html[data-screen='setup'] {
+  background: var(--color-canvas-parchment);
+}
+html[data-screen='deck'] {
+  background: var(--color-surface-tile-3);
+}
+html[data-screen='saved'] {
+  background: var(--color-canvas);
+}
+
+/* 덱 화면은 카드 드래그 중 페이지가 스크롤되면 안 된다. */
+html[data-screen='deck'],
+html[data-screen='deck'] body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  max-width: var(--app-max-width);
+  margin-inline: auto;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ── 상단 바 (sub-nav-frosted) ─────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 56px 1fr 56px;
+  align-items: center;
+  height: calc(var(--nav-height) + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) var(--space-xs) 0;
+  background: rgba(245, 245, 247, 0.8);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: var(--border-soft-hairline);
+  color: var(--color-ink);
+}
+
+.topbar--dark {
+  background: rgba(39, 39, 41, 0.8);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: var(--color-on-dark);
+}
+
+.topbar__title {
+  margin: 0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar__back,
+.topbar__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xxs);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-xs);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard);
+}
+
+.topbar--dark .topbar__back,
+.topbar--dark .topbar__action {
+  color: var(--color-primary-on-dark);
+}
+
+.topbar__back:active,
+.topbar__action:active {
+  transform: scale(0.95);
+}
+
+.topbar__action {
+  justify-self: end;
+}
+
+.topbar__spacer {
+  display: block;
+}
+
+/* ── 버튼 (pill CTA) ──────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-height: 44px;
+  padding: 11px 22px;
+  font-family: var(--font-text);
+  font-size: var(--text-body-size);
+  font-weight: 400;
+  letter-spacing: -0.022em;
+  white-space: nowrap;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard);
+}
+
+.pill:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
+}
+
+.pill--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.pill--ghost {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+/* button-pearl-capsule — 두 번째 버튼 문법 */
+.pill--pearl {
+  background: var(--color-surface-pearl);
+  color: var(--color-ink-muted-80);
+  border: 3px solid var(--color-divider-soft);
+  border-radius: var(--radius-md);
+  padding: 8px 18px;
+  font-size: var(--text-caption-size);
+}
+
+.pill--block {
+  width: 100%;
+}
+
+.pill:disabled {
+  background: var(--color-divider-soft);
+  color: var(--color-ink-muted-48);
+  cursor: default;
+}
+
+/* ── 선택 카드 (store-utility-card + configurator chip) ── */
+.option-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: 92px;
+  padding: var(--space-lg);
+  text-align: left;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard), border-color 150ms var(--ease-standard);
+}
+
+.option-card:active {
+  transform: scale(0.97);
+}
+
+.option-card:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
+}
+
+.option-card.is-selected {
+  border: 2px solid var(--color-primary-focus);
+  padding: calc(var(--space-lg) - 1px);
+}
+
+.option-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+.option-card__hint {
+  color: var(--color-ink-muted-48);
+}
+
+.option-card__mark {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid var(--color-hairline);
+  border-radius: var(--radius-full);
+}
+
+.option-card.is-selected .option-card__mark {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 4px var(--color-canvas);
+}
+
+/* ── 진행 표시 ────────────────────────────────────────── */
+.progress {
+  display: flex;
+  gap: var(--space-xxs);
+  padding: var(--space-md) var(--space-lg) 0;
+}
+
+.progress__bar {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--color-hairline);
+}
+
+.progress__bar.is-done {
+  background: var(--color-primary);
+}
+
+/* ── 빈 상태 ──────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xxl) var(--space-lg);
+  text-align: center;
+}
+
+.empty-state__desc {
+  color: var(--color-ink-muted-48);
+  max-width: 30ch;
+}
+
+.empty-state > .pill {
+  margin-top: var(--space-md);
+}
+
+/* ── 첫 화면 ──────────────────────────────────────────── */
+.screen--home {
+  padding: calc(var(--space-xxl) + env(safe-area-inset-top)) var(--space-lg)
+    calc(var(--space-xl) + env(safe-area-inset-bottom));
+  background: var(--color-surface-tile-1);
+  color: var(--color-on-dark);
+}
+
+.home__body {
+  margin-top: auto;
+}
+
+.home__eyebrow {
+  color: var(--color-body-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.home__wordmark {
+  margin-bottom: var(--space-lg);
+}
+
+.home__wordmark-accent {
+  color: var(--color-primary-on-dark);
+}
+
+.home__copy {
+  margin-bottom: var(--space-md);
+}
+
+.home__sub {
+  color: var(--color-body-muted);
+  max-width: 32ch;
+}
+
+.home__actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding-top: var(--space-xxl);
+}
+
+.home__saved-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 44px;
+  padding: 0 var(--space-sm);
+  background: none;
+  border: 0;
+  color: var(--color-primary-on-dark);
+  cursor: pointer;
+}
+
+/* ── 설정 화면 ────────────────────────────────────────── */
+.screen--setup {
+  background: var(--color-canvas-parchment);
+}
+
+.setup__body {
+  flex: 1;
+  padding: var(--space-xl) var(--space-lg) var(--space-lg);
+}
+
+.setup__question {
+  margin-bottom: var(--space-xs);
+}
+
+.setup__hint {
+  color: var(--color-ink-muted-48);
+}
+
+.setup__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-xl);
+}
+
+.setup__footer {
+  position: sticky;
+  bottom: 0;
+  padding: var(--space-md) var(--space-lg) calc(var(--space-md) + env(safe-area-inset-bottom));
+  background: rgba(245, 245, 247, 0.8);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* ── 포즈 추천 화면 ───────────────────────────────────── */
+.screen--deck {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--color-surface-tile-3);
+  color: var(--color-on-dark);
+}
+
+.deck-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg) var(--space-xs);
+}
+
+.condition-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-chip-translucent);
+  color: var(--color-ink);
+}
+
+.deck-header__counter {
+  color: var(--color-body-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-notice {
+  padding: 0 var(--space-lg) var(--space-xs);
+  color: var(--color-body-muted);
+}
+
+/* ── 카드 덱 ──────────────────────────────────────────── */
+.deck {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: var(--space-xs) var(--space-lg) 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pose-card {
+  position: absolute;
+  /* 위쪽 46px 은 뒤 카드가 삐져나올 자리 */
+  inset: 46px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-surface-tile-1);
+  border-radius: var(--radius-lg);
+  /* 시스템에서 유일한 드롭섀도우 — 사진 카드에만 쓴다 */
+  box-shadow: var(--shadow-product);
+  transform-origin: center;
+  transition: transform 420ms var(--ease-standard), filter 420ms var(--ease-standard);
+  will-change: transform;
+}
+
+/* 뒤 카드는 어둡게 눌러서 맨 앞 카드가 확실히 앞으로 나와 보이게 한다. */
+.pose-card:not(.is-top) {
+  filter: brightness(0.55);
+}
+
+.pose-card.is-dragging {
+  transition: none;
+}
+
+.pose-card.is-top {
+  cursor: grab;
+}
+
+.pose-card.is-top.is-dragging {
+  cursor: grabbing;
+}
+
+.pose-card__media {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-surface-black);
+}
+
+/* 사진 비율이 제각각이라 같은 사진을 흐리게 깔고 그 위에 원본을 통째로 얹는다. */
+.pose-card__backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.25);
+  filter: blur(28px) saturate(1.3) brightness(0.5);
+}
+
+.pose-card__photo {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.pose-card__fallback {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-body-muted);
+}
+
+.pose-card.is-missing .pose-card__backdrop,
+.pose-card.is-missing .pose-card__photo {
+  visibility: hidden;
+}
+
+.pose-card.is-missing .pose-card__fallback {
+  display: flex;
+}
+
+.pose-card__footer {
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  background: var(--color-surface-tile-1);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pose-card__title {
+  color: var(--color-on-dark);
+  margin-bottom: var(--space-xxs);
+}
+
+.pose-card__tip {
+  color: var(--color-body-muted);
+}
+
+.pose-card__stamp {
+  position: absolute;
+  top: var(--space-lg);
+  z-index: 2;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 2px solid currentColor;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 좌우 어느 쪽으로 넘겨도 결과가 같으므로 두 스탬프 모두 중립 흰색이다.
+   Action Blue 는 찜(유일한 저장 액션)에만 남겨 둔다. */
+.pose-card__stamp--drag-right {
+  left: var(--space-lg);
+  color: var(--color-on-dark);
+  transform: rotate(-10deg);
+}
+
+.pose-card__stamp--drag-left {
+  right: var(--space-lg);
+  color: var(--color-on-dark);
+  transform: rotate(10deg);
+}
+
+.pose-card__saved-badge {
+  display: none;
+  position: absolute;
+  left: var(--space-md);
+  bottom: var(--space-md);
+  z-index: 2;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-chip-translucent);
+  color: var(--color-ink);
+}
+
+.pose-card.is-saved .pose-card__saved-badge {
+  display: block;
+}
+
+.deck-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg) 0;
+}
+
+.deck-actions .pill--primary {
+  flex: 1;
+}
+
+.deck-hint {
+  padding: var(--space-sm) var(--space-lg) calc(var(--space-md) + env(safe-area-inset-bottom));
+  text-align: center;
+  color: var(--color-ink-muted-48);
+}
+
+/* ── 찜한 포즈 화면 ───────────────────────────────────── */
+.screen--saved {
+  background: var(--color-canvas);
+}
+
+.saved__body {
+  flex: 1;
+  padding: var(--space-lg) var(--space-lg) calc(var(--space-xxl) + env(safe-area-inset-bottom));
+}
+
+.saved-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.saved-list__empty {
+  grid-column: 1 / -1;
+}
+
+.saved-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+}
+
+.saved-card__media {
+  aspect-ratio: 3 / 4;
+  background: var(--color-canvas-parchment);
+}
+
+.saved-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.saved-card.is-missing .saved-card__image {
+  visibility: hidden;
+}
+
+.saved-card__text {
+  flex: 1;
+  padding: var(--space-sm) var(--space-sm) var(--space-xs);
+}
+
+.saved-card__tip {
+  color: var(--color-ink-muted-48);
+  margin-top: var(--space-xxs);
+}
+
+.saved-card__remove {
+  padding: var(--space-sm);
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--color-divider-soft);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard);
+}
+
+.saved-card__remove:active {
+  transform: scale(0.95);
+}
+
+/* ── 토스트 ───────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 100;
+  padding: 11px 22px;
+  font-size: var(--text-caption-size);
+  font-weight: 600;
+  letter-spacing: -0.016em;
+  color: var(--color-on-dark);
+  background: var(--color-ink);
+  border-radius: var(--radius-pill);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition: opacity 200ms var(--ease-standard), transform 200ms var(--ease-standard);
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ── 반응형 ───────────────────────────────────────────── */
+
+/* 아이폰 SE 급 좁은 화면 — 덱 화면의 좌우 여백과 버튼 패딩을 줄여 액션 줄이 한 줄에 들어오게 한다. */
+@media (max-width: 360px) {
+  .deck {
+    margin-inline: var(--space-sm);
+  }
+
+  .deck-header,
+  .deck-notice,
+  .deck-actions,
+  .deck-hint {
+    padding-inline: var(--space-sm);
+  }
+
+  .pill {
+    padding-inline: 16px;
+  }
+}
+
+/* 세로가 짧은 화면 — 사진에 최대한 높이를 몰아준다. */
+@media (max-height: 700px) {
+  .deck-header {
+    padding-block: var(--space-xs) var(--space-xxs);
+  }
+
+  .pose-card__footer {
+    padding: var(--space-sm) var(--space-md) var(--space-md);
+  }
+
+  .deck-actions {
+    padding-top: var(--space-sm);
+  }
+
+  .deck-hint {
+    padding-top: var(--space-xs);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pose-card,
+  .pill,
+  .option-card,
+  .toast {
+    transition-duration: 1ms;
+  }
+}
