@@ -2,7 +2,7 @@
  * 앱 전역 상태. 선택한 조건과 찜한 포즈만 들고 있으면 되므로 스토어 라이브러리 없이 간다.
  */
 
-import { loadPersistedState, persistState } from './lib/storage.js';
+import { loadPersistedState, persistState, clearLegacyLocalState } from './lib/storage.js';
 import { findPoseById, MOOD_IDS, PEOPLE_OPTIONS } from './data/poses.js';
 
 /**
@@ -14,6 +14,9 @@ import { findPoseById, MOOD_IDS, PEOPLE_OPTIONS } from './data/poses.js';
 
 /** @type {AppState} */
 const DEFAULT_STATE = { people: null, mood: null, savedIds: [] };
+
+// 이전 버전이 localStorage 에 저장해둔 값이 남아 있으면 방문마다 초기화가 안 된다.
+clearLegacyLocalState();
 
 /** @type {AppState} */
 const state = loadPersistedState(DEFAULT_STATE);

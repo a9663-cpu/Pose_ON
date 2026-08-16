@@ -54,11 +54,12 @@ export function createSavedScreen() {
         el('li', { class: 'saved-list__empty' }, [
           emptyState({
             title: '아직 찜한 포즈가 없어요',
-            description: '마음에 드는 포즈를 오른쪽으로 넘기면 여기에 모여요.',
+            description: '포즈 카드에서 마음에 들어요를 누르면 여기에 모여요.',
+            // 찜이 하나도 없는 상태라 조건부터 다시 고르는 게 자연스럽다.
             action: pillButton({
               label: '포즈 보러 가기',
               variant: 'primary',
-              onClick: () => navigate(backPath),
+              onClick: () => navigate('#/people'),
             }),
           }),
         ]),
