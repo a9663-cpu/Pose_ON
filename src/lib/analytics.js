@@ -23,7 +23,18 @@ const EVENTS_ENDPOINT = '/rest/v1/events';
 /** @typedef {import('../data/poses.js').Pose} Pose */
 /** @typedef {{ people: number | null, mood: string | null }} Condition */
 
-const isConfigured = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
+/**
+ * Supabase 대시보드에서 URL 을 복사하면 끝에 `/` 가 붙어 오는 경우가 많다.
+ * 그대로 두면 `https://xxx.supabase.co//rest/v1/events` 처럼 슬래시가 겹쳐 404 가 난다.
+ * 공백과 끝 슬래시를 여기서 한 번에 정리한다.
+ */
+const baseUrl = SUPABASE_URL.trim().replace(/\/+$/, '');
+const anonKey = SUPABASE_ANON_KEY.trim();
+
+const isConfigured = baseUrl.length > 0 && anonKey.length > 0;
+
+/** 실제로 요청이 날아가는 주소. 문제 생겼을 때 이 값부터 확인하면 된다. */
+const endpoint = `${baseUrl}${EVENTS_ENDPOINT}`;
 
 /**
  * crypto.randomUUID 는 보안 컨텍스트(https 또는 localhost)에서만 존재한다.
@@ -90,27 +101,92 @@ const viewedPoseIds = new Set();
 /**
  * @param {Record<string, unknown>} event
  */
+function requestHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    apikey: anonKey,
+    Authorization: `Bearer ${anonKey}`,
+    // 응답 본문을 요구하지 않는다. RLS 가 INSERT 만 허용하므로 필수 설정이다.
+    Prefer: 'return=minimal',
+  };
+}
+
 function sendEvent(event) {
   if (!isConfigured) return;
 
   const row = { visitor_id: getVisitorId(), session_id: sessionId, ...event };
 
   try {
-    fetch(`${SUPABASE_URL}${EVENTS_ENDPOINT}`, {
+    fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        // 응답 본문을 요구하지 않는다. RLS 가 INSERT 만 허용하므로 필수 설정이다.
-        Prefer: 'return=minimal',
-      },
+      headers: requestHeaders(),
       body: JSON.stringify(row),
       keepalive: true,
-    }).catch(() => {});
-  } catch {
-    // fetch 자체가 막힌 환경이어도 여기서 끝낸다.
+    })
+      .then(async (response) => {
+        if (response.ok) return;
+        // 서비스 동작은 그대로 두되, 왜 안 쌓이는지는 콘솔에서 볼 수 있어야 한다.
+        const detail = await response.text().catch(() => '');
+        console.warn(
+          `[analytics] 기록 실패 ${response.status} ${response.statusText} — ${endpoint}\n${detail}`,
+        );
+      })
+      .catch((error) => {
+        console.warn(`[analytics] 요청 자체가 실패했습니다 — ${endpoint}`, error);
+      });
+  } catch (error) {
+    console.warn('[analytics] fetch 를 시작하지 못했습니다.', error);
   }
+}
+
+/**
+ * 브라우저 콘솔에서 `poseOnDiagnose()` 로 실행하는 진단 도구.
+ * 설정값과 테스트 전송 결과(HTTP 상태 + 응답 본문)를 그대로 보여준다.
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function diagnose() {
+  /** @type {Record<string, unknown>} */
+  const report = {
+    설정됨: isConfigured,
+    SUPABASE_URL: SUPABASE_URL === '' ? '(비어 있음)' : SUPABASE_URL,
+    보정된_엔드포인트: isConfigured ? endpoint : '(설정 없음)',
+    anon키_길이: anonKey.length,
+  };
+
+  if (!isConfigured) {
+    console.warn(
+      '[analytics] config.js 가 비어 있습니다.\n' +
+        '  → Vercel 환경변수(SUPABASE_URL / SUPABASE_ANON_KEY)를 등록했는지,\n' +
+        '  → 등록 "후에" 다시 배포했는지 확인하세요. 환경변수는 다음 빌드부터 반영됩니다.',
+      report,
+    );
+    return report;
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: requestHeaders(),
+      body: JSON.stringify({ visitor_id: getVisitorId(), session_id: sessionId, type: 'session_start' }),
+    });
+    const detail = await response.text().catch(() => '');
+
+    report.status = `${response.status} ${response.statusText}`;
+    report.응답본문 = detail === '' ? '(없음)' : detail;
+    report.성공 = response.ok;
+
+    if (response.ok) {
+      console.log('[analytics] 테스트 전송 성공. 대시보드 events 테이블을 확인하세요.', report);
+    } else {
+      console.error('[analytics] 테스트 전송 실패', report);
+    }
+  } catch (error) {
+    report.성공 = false;
+    report.오류 = String(error);
+    console.error('[analytics] 요청이 아예 나가지 못했습니다 (CORS / 네트워크 / 차단기 의심)', report, error);
+  }
+
+  return report;
 }
 
 export function isAnalyticsConfigured() {
