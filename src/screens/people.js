@@ -3,6 +3,7 @@
 import { PEOPLE_OPTIONS } from '../data/poses.js';
 import { createChoiceScreen } from '../components/choiceScreen.js';
 import { getPeople, setPeople } from '../state.js';
+import { trackEvent } from '../lib/ga.js';
 import { navigate } from '../router.js';
 
 export function createPeopleScreen() {
@@ -18,6 +19,7 @@ export function createPeopleScreen() {
     onBack: () => navigate('#/'),
     onSubmit: (people) => {
       setPeople(people);
+      trackEvent('select_people', { people });
       navigate('#/mood');
     },
   });

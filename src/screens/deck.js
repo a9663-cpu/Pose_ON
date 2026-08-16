@@ -14,6 +14,7 @@ import {
 import { createPoseDeck } from '../components/poseDeck.js';
 import { requestFeedbackPopup } from '../components/feedbackPopup.js';
 import { countPoseView, trackLike } from '../lib/analytics.js';
+import { trackEvent } from '../lib/ga.js';
 import { filterPoses, peopleLabel, moodLabel } from '../data/poses.js';
 import {
   getPeople,
@@ -37,10 +38,15 @@ export function createDeckScreen() {
   const { poses: matched, isExactMatch } = filterPoses(people, mood);
   const poses = shuffle(matched);
 
-  let savedAction = savedCountButton({ count: getSavedCount(), onClick: () => navigate('#/saved') });
+  function openSaved() {
+    trackEvent('open_saved', { from: 'deck' });
+    navigate('#/saved');
+  }
+
+  let savedAction = savedCountButton({ count: getSavedCount(), onClick: openSaved });
 
   function refreshSavedAction() {
-    const next = savedCountButton({ count: getSavedCount(), onClick: () => navigate('#/saved') });
+    const next = savedCountButton({ count: getSavedCount(), onClick: openSaved });
     savedAction.replaceWith(next);
     savedAction = next;
   }
@@ -106,6 +112,11 @@ export function createDeckScreen() {
     }
 
     trackLike(isSavedNow);
+    trackEvent(isSavedNow ? 'like_pose' : 'unlike_pose', {
+      pose_id: pose.id,
+      people,
+      mood,
+    });
     poseDeck.syncSavedState();
     syncLikeButton(pose);
     refreshSavedAction();
@@ -138,7 +149,10 @@ export function createDeckScreen() {
       pillButton({
         label: '조건 변경',
         variant: 'pearl',
-        onClick: () => navigate('#/people'),
+        onClick: () => {
+          trackEvent('change_condition', { people, mood });
+          navigate('#/people');
+        },
       }),
       likeButton,
     ]),

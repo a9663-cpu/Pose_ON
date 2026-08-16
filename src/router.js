@@ -2,8 +2,10 @@
  * 해시 기반 라우터. 화면 전환마다 이전 화면의 destroy 를 호출해 리스너를 정리한다.
  *
  * @typedef {{ element: HTMLElement, tone: string, destroy?: () => void }} Screen
- * @typedef {{ create: () => Screen, guard?: () => string | null }} Route
+ * @typedef {{ create: () => Screen, guard?: () => string | null, title: string }} Route
  */
+
+import { trackScreenView } from './lib/ga.js';
 
 const DEFAULT_PATH = '#/';
 
@@ -44,6 +46,9 @@ function renderCurrentRoute() {
   document.documentElement.dataset.screen = currentScreen.tone;
   rootElement.replaceChildren(currentScreen.element);
   window.scrollTo(0, 0);
+
+  // 해시만 바뀌면 GA 가 스스로 알아채지 못하므로 화면 조회를 직접 알린다.
+  trackScreenView(route.title);
 }
 
 /**

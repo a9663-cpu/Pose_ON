@@ -6,6 +6,7 @@
 import { el } from '../lib/dom.js';
 import { pillButton, heartIcon } from '../components/ui.js';
 import { getSavedCount } from '../state.js';
+import { trackEvent } from '../lib/ga.js';
 import { navigate } from '../router.js';
 
 export function createHomeScreen() {
@@ -18,7 +19,10 @@ export function createHomeScreen() {
           {
             class: 'home__saved-link t-body',
             type: 'button',
-            onClick: () => navigate('#/saved'),
+            onClick: () => {
+              trackEvent('open_saved', { from: 'home' });
+              navigate('#/saved');
+            },
           },
           [heartIcon({ filled: true, size: 16 }), el('span', { text: `찜한 포즈 ${savedCount}개` })],
         )
@@ -42,7 +46,10 @@ export function createHomeScreen() {
         label: '포즈 추천받기',
         variant: 'primary',
         block: true,
-        onClick: () => navigate('#/people'),
+        onClick: () => {
+          trackEvent('start_recommend');
+          navigate('#/people');
+        },
       }),
       savedLink,
     ]),

@@ -8,6 +8,7 @@
  */
 
 import { el } from '../lib/dom.js';
+import { trackEvent } from '../lib/ga.js';
 import {
   getFeedbackState,
   setFeedbackState,
@@ -64,6 +65,7 @@ function createPopup() {
   }
 
   function dismiss() {
+    trackEvent('dismiss_feedback');
     setFeedbackState('dismissed');
     close();
   }
@@ -71,6 +73,7 @@ function createPopup() {
   /** @param {number} score */
   function submit(score) {
     trackFeedback(score);
+    trackEvent('submit_feedback', { score });
     setFeedbackState('submitted');
     element.classList.add('is-thanks');
     window.clearTimeout(hideTimerId);

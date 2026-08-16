@@ -3,6 +3,7 @@
 import { getMoodOptions } from '../data/poses.js';
 import { createChoiceScreen } from '../components/choiceScreen.js';
 import { getMood, setMood, getPeople } from '../state.js';
+import { trackEvent } from '../lib/ga.js';
 import { navigate } from '../router.js';
 
 export function createMoodScreen() {
@@ -21,6 +22,7 @@ export function createMoodScreen() {
     onBack: () => navigate('#/people'),
     onSubmit: (mood) => {
       setMood(mood);
+      trackEvent('select_mood', { mood, people: getPeople() ?? 0 });
       navigate('#/deck');
     },
   });
