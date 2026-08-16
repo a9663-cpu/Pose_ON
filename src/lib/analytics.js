@@ -146,13 +146,24 @@ function sendEvent(event) {
  * @param {string} detail 응답 본문
  */
 function explainFailure(status, detail) {
-  if (detail.includes('PGRST205') || status === 404) {
+  // 404 는 원인이 두 갈래다. 응답 본문으로 갈라야 헛짚지 않는다.
+  if (status === 404) {
+    if (detail.includes('PGRST205')) {
+      return (
+        'PostgREST 에는 닿았지만 events 테이블을 못 찾습니다.\n' +
+        "  → 스키마 캐시가 낡았습니다. SQL Editor 에서: notify pgrst, 'reload schema';\n" +
+        '  → 그래도 안 되면 SQL 을 실행한 프로젝트와 위 엔드포인트의 프로젝트가 다른 것입니다.'
+      );
+    }
     return (
-      'events 테이블을 찾지 못했습니다. 아래를 순서대로 확인하세요.\n' +
-      '  1) supabase/schema.sql 을 SQL Editor 에서 실행했는가\n' +
-      '  2) 실행한 프로젝트와 위 엔드포인트 주소의 프로젝트가 같은가\n' +
-      "  3) 실행했는데도 404 라면 스키마 캐시 문제다. SQL Editor 에서: notify pgrst, 'reload schema';"
+      'PostgREST 가 아닌 엉뚱한 서버가 404 를 돌려줬습니다. SUPABASE_URL 이 잘못됐을 가능성이 큽니다.\n' +
+      '  → 올바른 형태: https://<프로젝트ref>.supabase.co\n' +
+      '  → 흔한 실수: 대시보드 주소(https://supabase.com/dashboard/project/...)를 넣는 것\n' +
+      '  → Project Settings → API 의 "Project URL" 값을 그대로 넣으세요.'
     );
+  }
+  if (detail.includes('PGRST205')) {
+    return "스키마 캐시가 낡았습니다. SQL Editor 에서: notify pgrst, 'reload schema';";
   }
   if (detail.includes('42501') || status === 403) {
     return (
@@ -192,6 +203,23 @@ export async function diagnose() {
       report,
     );
     return report;
+  }
+
+  // URL 생김새부터 본다. 대시보드 주소를 잘못 넣는 실수가 가장 흔하다.
+  const looksLikeSupabaseApi = /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(baseUrl);
+  report.URL_형태 = looksLikeSupabaseApi
+    ? '정상 (https://<ref>.supabase.co)'
+    : '⚠ 이상함 — Project Settings → API 의 "Project URL" 값이 맞는지 확인하세요';
+
+  // PostgREST 자체에 닿는지 먼저 확인한다.
+  // 여기가 404 면 주소가 틀린 것이고, 여기가 200 인데 INSERT 가 404 면 테이블/캐시 문제다.
+  try {
+    const probe = await fetch(`${baseUrl}/rest/v1/`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+    });
+    report.PostgREST_도달 = `${probe.status} ${probe.statusText}`;
+  } catch (error) {
+    report.PostgREST_도달 = `실패 (${String(error)})`;
   }
 
   try {
