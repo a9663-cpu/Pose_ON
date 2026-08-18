@@ -122,6 +122,9 @@ function createCard(pose, isSaved) {
  *   getTopPose: () => Pose | null,
  *   syncSavedState: () => void,
  *   undo: () => void,
+ *   likeTopCard: () => void,
+ *   passTopCard: () => void,
+ *   playSwipeHint: () => void,
  *   destroy: () => void,
  * }}
  */
@@ -418,11 +421,60 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
   applyLayout();
   notifyTopChange();
 
+  /**
+   * 카드가 좌우로 살짝 흔들리며 양쪽 스탬프를 차례로 보여준다.
+   * 하단에 작은 글씨로 안내해봐야 잘 읽히지 않는다. 카드가 직접 움직여 보이는 편이
+   * "이건 좌우로 넘기는 것"이라는 걸 훨씬 빨리 알려준다.
+   * 사용자가 화면을 건드리면 즉시 멈춘다.
+   */
+  function playSwipeHint() {
+    const top = layers[0];
+    if (!top || isAnimating) return;
+    if (typeof top.element.animate !== 'function') return;
+
+    const nudge = 44;
+    const animation = top.element.animate(
+      [
+        { transform: 'translate3d(0, 0, 0) rotate(0deg)', offset: 0 },
+        { transform: `translate3d(${nudge}px, 0, 0) rotate(3deg)`, offset: 0.3 },
+        { transform: 'translate3d(0, 0, 0) rotate(0deg)', offset: 0.5 },
+        { transform: `translate3d(${-nudge}px, 0, 0) rotate(-3deg)`, offset: 0.8 },
+        { transform: 'translate3d(0, 0, 0) rotate(0deg)', offset: 1 },
+      ],
+      { duration: 1600, easing: 'ease-in-out' },
+    );
+
+    const stampFrames = [
+      { opacity: 0, offset: 0 },
+      { opacity: 1, offset: 0.3 },
+      { opacity: 0, offset: 0.5 },
+    ];
+    const rightStamp = top.dragRightStamp.animate(stampFrames, { duration: 1600 });
+    const leftStamp = top.dragLeftStamp.animate(
+      [
+        { opacity: 0, offset: 0 },
+        { opacity: 0, offset: 0.5 },
+        { opacity: 1, offset: 0.8 },
+        { opacity: 0, offset: 1 },
+      ],
+      { duration: 1600 },
+    );
+
+    const stop = () => {
+      for (const item of [animation, rightStamp, leftStamp]) item.cancel();
+    };
+    animation.addEventListener('finish', () => deck.removeEventListener('pointerdown', stop), { once: true });
+    deck.addEventListener('pointerdown', stop, { once: true });
+  }
+
   return {
     element: deck,
     getTopPose: () => layers[0]?.pose ?? null,
     syncSavedState,
     undo,
+    likeTopCard: () => flyOut('right'),
+    passTopCard: () => flyOut('left'),
+    playSwipeHint,
     destroy: () => {
       cancelSpring?.();
       window.clearTimeout(flyOutTimerId);

@@ -10,6 +10,8 @@ import {
   conditionChip,
   emptyState,
   undoIcon,
+  passIcon,
+  heartIcon,
 } from '../components/ui.js';
 import { createPoseDeck } from '../components/poseDeck.js';
 import { requestFeedbackPopup } from '../components/feedbackPopup.js';
@@ -60,8 +62,12 @@ export function createDeckScreen() {
 
   const counter = el('span', { class: 'deck-header__counter t-caption' });
 
+  // 조건 표시와 조건 변경을 한 자리로 합쳤다. 하단은 좌우 구분에만 쓴다.
   const header = el('div', { class: 'deck-header' }, [
-    conditionChip(`${peopleLabel(people)} · ${moodLabel(mood, people)}`),
+    conditionChip(`${peopleLabel(people)} · ${moodLabel(mood, people)}`, () => {
+      trackEvent('change_condition', { people, mood });
+      navigate('#/');
+    }),
     counter,
   ]);
 
@@ -79,12 +85,32 @@ export function createDeckScreen() {
     return { element, tone: 'deck' };
   }
 
-  const undoButton = pillButton({
-    label: '되돌리기',
+  const undoButton = el(
+    'button',
+    {
+      class: 'deck-undo',
+      type: 'button',
+      'aria-label': '방금 넘긴 포즈 되돌리기',
+      disabled: true,
+      onClick: () => poseDeck.undo(),
+    },
+    [undoIcon({ size: 18 })],
+  );
+
+  // 하단 버튼을 누르면 카드가 그 방향으로 날아간다.
+  // 누르는 것과 넘기는 것이 같은 결과라는 걸 눈으로 보여줘야 스와이프 방향이 학습된다.
+  const passButton = pillButton({
+    label: '그저 그래요',
     variant: 'pearl',
-    leading: undoIcon(),
-    disabled: true,
-    onClick: () => poseDeck.undo(),
+    leading: passIcon(),
+    onClick: () => poseDeck.passTopCard(),
+  });
+
+  const likeButton = pillButton({
+    label: '좋아요',
+    variant: 'primary',
+    leading: heartIcon({ filled: true, size: 18 }),
+    onClick: () => poseDeck.likeTopCard(),
   });
 
   /** 오른쪽으로 넘김 = 좋아요. 이미 찜한 포즈면 그대로 두고 넘어간다. */
@@ -140,26 +166,45 @@ export function createDeckScreen() {
         })
       : null,
     poseDeck.element,
-    el('div', { class: 'deck-actions' }, [
-      pillButton({
-        label: '조건 변경',
-        variant: 'pearl',
-        onClick: () => {
-          trackEvent('change_condition', { people, mood });
-          navigate('#/');
-        },
-      }),
-      undoButton,
-    ]),
+    el('div', { class: 'deck-actions' }, [undoButton, passButton, likeButton]),
     el('p', {
       class: 'deck-hint t-fine-print',
-      text: '← 그저 그래요 · 좋아요 →',
+      text: '카드를 좌우로 넘겨도 돼요',
     }),
   ]);
+
+  // 방문당 한 번, 카드가 좌우로 살짝 흔들려 "넘기는 것"임을 보여준다.
+  // 라우터가 화면을 붙인 뒤에 실행돼야 해서 한 박자 늦춘다.
+  let hintTimerId = 0;
+  if (!hasSeenSwipeHint()) {
+    markSwipeHintSeen();
+    hintTimerId = window.setTimeout(() => poseDeck.playSwipeHint(), 700);
+  }
 
   return {
     element,
     tone: 'deck',
-    destroy: () => poseDeck.destroy(),
+    destroy: () => {
+      window.clearTimeout(hintTimerId);
+      poseDeck.destroy();
+    },
   };
+}
+
+const SWIPE_HINT_KEY = 'pose-on:swipe-hint:v1';
+
+function hasSeenSwipeHint() {
+  try {
+    return window.sessionStorage.getItem(SWIPE_HINT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markSwipeHintSeen() {
+  try {
+    window.sessionStorage.setItem(SWIPE_HINT_KEY, '1');
+  } catch {
+    // 저장이 막혀도 안내가 한 번 더 나올 뿐이다.
+  }
 }

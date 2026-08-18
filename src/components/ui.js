@@ -35,6 +35,8 @@ const HEART_PATH =
 const BACK_PATH = 'M15 5 8 12l7 7';
 
 const UNDO_PATH = 'M9 14 4 9l5-5M4 9h8a7 7 0 1 1 0 14h-3';
+const CLOSE_PATH = 'M6 6l12 12M18 6L6 18';
+const CHEVRON_PATH = 'M9 6l6 6-6 6';
 
 /** @param {{ filled?: boolean, size?: number }} [options] */
 export function heartIcon(options) {
@@ -44,6 +46,11 @@ export function heartIcon(options) {
 /** 되돌리기(반시계 화살표) @param {{ size?: number }} [options] */
 export function undoIcon({ size = 16 } = {}) {
   return icon(UNDO_PATH, { size });
+}
+
+/** 그저 그래요(✕) @param {{ size?: number }} [options] */
+export function passIcon({ size = 18 } = {}) {
+  return icon(CLOSE_PATH, { size });
 }
 
 /**
@@ -155,10 +162,26 @@ export function optionCard({ label, hint, selected, onSelect }) {
 
 /**
  * 현재 조건을 보여주는 pill. (예: "2명 · 힙한")
+ * onClick 을 주면 눌러서 조건을 바꿀 수 있는 버튼이 된다.
+ * 조건을 보여주는 자리와 바꾸는 자리를 하나로 합치면 하단이 그만큼 비고,
+ * "여기가 지금 조건"이라는 것도 더 잘 읽힌다.
+ *
  * @param {string} text
+ * @param {() => void} [onClick]
  */
-export function conditionChip(text) {
-  return el('span', { class: 'condition-chip t-caption-strong', text });
+export function conditionChip(text, onClick) {
+  if (!onClick) return el('span', { class: 'condition-chip t-caption-strong', text });
+
+  return el(
+    'button',
+    {
+      class: 'condition-chip condition-chip--button t-caption-strong',
+      type: 'button',
+      'aria-label': `현재 조건 ${text}. 눌러서 바꾸기`,
+      onClick,
+    },
+    [el('span', { text }), icon(CHEVRON_PATH, { size: 14 })],
+  );
 }
 
 /**

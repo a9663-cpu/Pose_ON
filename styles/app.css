@@ -484,10 +484,29 @@ html[data-screen='deck'] body {
 .condition-chip {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-xxs);
   padding: 8px 14px;
   border-radius: var(--radius-pill);
   background: var(--color-surface-chip-translucent);
   color: var(--color-ink);
+}
+
+/* 조건 표시가 곧 조건 변경 버튼이다. */
+.condition-chip--button {
+  min-height: 36px;
+  padding-right: 10px;
+  border: 0;
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard);
+}
+
+.condition-chip--button:active {
+  transform: scale(0.95);
+}
+
+.condition-chip--button:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
 }
 
 .deck-header__counter {
@@ -604,32 +623,32 @@ html[data-screen='deck'] body {
   color: var(--color-body-muted);
 }
 
+/* 드래그 중 뜨는 도장. 하단 버튼과 같은 색·같은 말을 써서 두 갈래를 확실히 구분시킨다. */
 .pose-card__stamp {
   position: absolute;
   top: var(--space-lg);
   z-index: 2;
-  padding: 8px 16px;
+  padding: 10px 18px;
+  font-size: var(--text-tagline-size);
   border-radius: var(--radius-pill);
-  border: 2px solid currentColor;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   opacity: 0;
   pointer-events: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-product);
 }
 
-/* 좌우 어느 쪽으로 넘겨도 결과가 같으므로 두 스탬프 모두 중립 흰색이다.
-   Action Blue 는 찜(유일한 저장 액션)에만 남겨 둔다. */
-/* 오른쪽으로 넘기면 찜으로 이어지므로 유일한 액션 컬러를 쓴다. */
+/* 오른쪽으로 넘기면 찜으로 이어지므로 유일한 액션 컬러를 채워서 쓴다. */
 .pose-card__stamp--drag-right {
   left: var(--space-lg);
-  color: var(--color-primary-on-dark);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   transform: rotate(-10deg);
 }
 
 .pose-card__stamp--drag-left {
   right: var(--space-lg);
-  color: var(--color-on-dark);
+  background: var(--color-canvas);
+  color: var(--color-ink);
   transform: rotate(10deg);
 }
 
@@ -649,16 +668,58 @@ html[data-screen='deck'] body {
   display: block;
 }
 
+/* 좌우 두 갈래를 같은 크기·같은 무게로 나란히 놓아 "두 갈래"임을 눈으로 알린다.
+   버튼을 누르면 카드가 그 방향으로 날아가서 스와이프 방향과 의미가 연결된다. */
 .deck-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   padding: var(--space-md) var(--space-lg) 0;
 }
 
+/* 두 버튼은 크기·모양을 완전히 같게 두고 색으로만 갈라야 "두 갈래"로 읽힌다.
+   pearl 기본형은 테두리 3px·작은 글씨라 그대로 두면 짝으로 안 보인다. */
 .deck-actions .pill {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: var(--space-sm);
+  font-size: var(--text-body-size);
+  border-radius: var(--radius-pill);
+}
+
+.deck-actions .pill--pearl {
+  border-width: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+.deck-undo {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-full);
+  color: var(--color-body-muted);
+  cursor: pointer;
+  transition: transform 150ms var(--ease-standard), opacity 150ms var(--ease-standard);
+}
+
+.deck-undo:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.deck-undo:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.deck-undo:focus-visible {
+  outline: 2px solid var(--color-primary-focus);
+  outline-offset: 2px;
 }
 
 .deck-hint {
