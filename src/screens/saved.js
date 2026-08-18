@@ -4,7 +4,7 @@
 
 import { el, showToast } from '../lib/dom.js';
 import { topBar, pillButton, emptyState } from '../components/ui.js';
-import { poseImageSrc } from '../data/poses.js';
+import { poseImageSrc, poseThumbSrc } from '../data/poses.js';
 import { getSavedPoses, removeSaved, hasCompleteCondition } from '../state.js';
 import { navigate } from '../router.js';
 
@@ -13,9 +13,10 @@ import { navigate } from '../router.js';
  * @param {() => void} onRemove
  */
 function savedCard(pose, onRemove) {
+  // 목록에서는 작게 보이므로 썸네일이면 충분하다. (원본 평균 67KB → 8KB)
   const thumbnail = el('img', {
     class: 'saved-card__image',
-    src: poseImageSrc(pose),
+    src: poseThumbSrc(pose),
     alt: `${pose.title} 포즈 예시 사진`,
     loading: 'lazy',
     decoding: 'async',
@@ -37,7 +38,16 @@ function savedCard(pose, onRemove) {
     }),
   ]);
 
-  thumbnail.addEventListener('error', () => card.classList.add('is-missing'));
+  // 썸네일이 없으면 원본으로 한 번 더 시도하고, 원본까지 없을 때만 빈 상태로 둔다.
+  let hasTriedOriginal = false;
+  thumbnail.addEventListener('error', () => {
+    if (hasTriedOriginal) {
+      card.classList.add('is-missing');
+      return;
+    }
+    hasTriedOriginal = true;
+    thumbnail.src = poseImageSrc(pose);
+  });
 
   return card;
 }
@@ -59,7 +69,7 @@ export function createSavedScreen() {
             action: pillButton({
               label: '포즈 보러 가기',
               variant: 'primary',
-              onClick: () => navigate('#/people'),
+              onClick: () => navigate('#/'),
             }),
           }),
         ]),

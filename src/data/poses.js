@@ -684,6 +684,19 @@ export function poseImageSrc(pose) {
 }
 
 /**
+ * 작게 보여줄 때 쓰는 썸네일 경로. 원본은 평균 67KB 라 첫 화면이나 목록에 그대로
+ * 쓰면 무겁다. `scripts/make-thumbs.py` 가 미리 만들어 둔 8KB 짜리를 쓴다.
+ *
+ * 썸네일이 없을 수도 있으므로(사진을 추가하고 스크립트를 안 돌린 경우)
+ * 이 경로를 쓰는 쪽에서는 반드시 onerror 로 원본 경로를 대신 넣어줘야 한다.
+ *
+ * @param {Pose} pose
+ */
+export function poseThumbSrc(pose) {
+  return `${IMAGE_DIR}/thumbs/${encodeURIComponent(`${pose.file}.webp`)}`;
+}
+
+/**
  * 인원 수 + 무드로 포즈를 고른다.
  * 정확히 맞는 포즈가 없으면 조건을 단계적으로 풀어 빈 화면을 만들지 않는다.
  *

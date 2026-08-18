@@ -4,7 +4,6 @@ import { startRouter } from './router.js';
 import { trackSessionStart, diagnose, resetFeedbackState, startNewVisit } from './lib/analytics.js';
 import { mountFeedbackPopup } from './components/feedbackPopup.js';
 import { createHomeScreen } from './screens/home.js';
-import { createPeopleScreen } from './screens/people.js';
 import { createMoodScreen, guardMoodScreen } from './screens/mood.js';
 import { createDeckScreen, guardDeckScreen } from './screens/deck.js';
 import { createSavedScreen } from './screens/saved.js';
@@ -25,8 +24,7 @@ if (root) {
 
   // title 은 브라우저 탭 제목이자 GA 보고서의 "페이지 제목"이 된다.
   startRouter(root, {
-    '#/': { create: createHomeScreen, title: 'Pose ON' },
-    '#/people': { create: createPeopleScreen, title: '인원 선택' },
+    '#/': { create: createHomeScreen, title: '인원 선택' },
     '#/mood': { create: createMoodScreen, guard: guardMoodScreen, title: '무드 선택' },
     '#/deck': { create: createDeckScreen, guard: guardDeckScreen, title: '포즈 추천' },
     '#/saved': { create: createSavedScreen, title: '찜한 포즈' },

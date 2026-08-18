@@ -4,8 +4,8 @@
  * - 맨 앞 카드만 드래그된다. 뒤 카드 2장은 위쪽으로 살짝 삐져나와 "다음 카드"를 예고한다.
  * - 손을 떼면 임계값/속도에 따라 날려보내거나(fly out) 스프링으로 제자리에 돌아온다.
  * - 카드가 떨어지면 즉시 새 카드를 뒤에 채워서 덱이 비지 않는다. 끝까지 가면 처음으로 순환한다.
- * - 좌우 어느 쪽으로 넘겨도 결과는 "다음 포즈"로 같다. 찜은 화면의 버튼이 담당하고
- *   덱은 탐색만 책임진다.
+ * - 오른쪽으로 넘기면 좋아요(찜), 왼쪽으로 넘기면 그저 그래요다.
+ *   실수로 넘겨도 되돌릴 수 있어야 마음 편히 스와이프하므로 undo 를 함께 제공한다.
  */
 
 import { el, clamp } from '../lib/dom.js';
@@ -82,14 +82,14 @@ function createCard(pose, isSaved) {
     el('span', { class: 'pose-card__saved-badge t-caption-strong', text: '♥ 찜한 포즈' }),
   ]);
 
-  // 좌우 둘 다 "다음 포즈"라서 색은 중립(흰색)으로 두고 방향만 화살표로 알려준다.
+  // 오른쪽은 저장으로 이어지므로 유일한 액션 컬러를 쓰고, 왼쪽은 중립(흰색)으로 둔다.
   const dragRightStamp = el('span', {
     class: 'pose-card__stamp pose-card__stamp--drag-right t-body-strong',
-    text: '다음 →',
+    text: '좋아요',
   });
   const dragLeftStamp = el('span', {
     class: 'pose-card__stamp pose-card__stamp--drag-left t-body-strong',
-    text: '← 다음',
+    text: '그저 그래요',
   });
 
   const footer = el('div', { class: 'pose-card__footer' }, [
@@ -112,15 +112,20 @@ function createCard(pose, isSaved) {
  * @param {object} options
  * @param {Pose[]} options.poses                          이미 원하는 순서로 섞여 있는 목록
  * @param {(poseId: string) => boolean} options.isSaved   찜 배지를 그릴 때 참조한다
+ * @param {(pose: Pose) => void} options.onLike           오른쪽으로 넘겼을 때 (좋아요)
+ * @param {(pose: Pose) => void} options.onPass           왼쪽으로 넘겼을 때 (그저 그래요)
+ * @param {(pose: Pose, wasLiked: boolean) => void} options.onUndo  되돌렸을 때
  * @param {(pose: Pose, position: number, total: number) => void} [options.onTopChange]
+ * @param {(canUndo: boolean) => void} [options.onHistoryChange]
  * @returns {{
  *   element: HTMLElement,
  *   getTopPose: () => Pose | null,
  *   syncSavedState: () => void,
+ *   undo: () => void,
  *   destroy: () => void,
  * }}
  */
-export function createPoseDeck({ poses, isSaved, onTopChange }) {
+export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopChange, onHistoryChange }) {
   const deck = el('div', { class: 'deck' });
 
   /** @type {DeckCard[]} */
@@ -129,6 +134,9 @@ export function createPoseDeck({ poses, isSaved, onTopChange }) {
   let cursor = 0;
   /** 지금까지 넘긴 장수 — "3 / 12" 표시에 쓴다 */
   let position = 0;
+  /** 되돌리기용 기록. 넘긴 방향과, 그때 새로 찜된 것인지를 남긴다. */
+  /** @type {{ pose: Pose, direction: 'left' | 'right' }[]} */
+  const history = [];
   let isAnimating = false;
 
   /** @type {(() => void) | null} */
@@ -195,20 +203,69 @@ export function createPoseDeck({ poses, isSaved, onTopChange }) {
     onTopChange(top.pose, (position % poses.length) + 1, poses.length);
   }
 
-  /** 맨 앞 카드를 떼어내고 뒤를 한 칸씩 당긴다. */
-  function advance() {
+  function notifyHistoryChange() {
+    onHistoryChange?.(history.length > 0);
+  }
+
+  /**
+   * 맨 앞 카드를 떼어내고 뒤를 한 칸씩 당긴다.
+   * @param {'left' | 'right'} direction
+   */
+  function advance(direction) {
     window.clearTimeout(flyOutTimerId);
     const leaving = layers.shift();
     leaving?.element.remove();
+    if (leaving) history.push({ pose: leaving.pose, direction });
     position += 1;
     pushCard();
+    applyLayout();
+    isAnimating = false;
+    notifyTopChange();
+    notifyHistoryChange();
+  }
+
+  /**
+   * 방금 넘긴 카드를 되돌린다. 오른쪽으로 넘긴 카드였다면 찜도 함께 취소한다.
+   * 맨 뒤 카드를 하나 버리고, 되돌린 카드를 맨 앞에 끼워 넣은 뒤 밖에서 날아 들어오게 한다.
+   */
+  function undo() {
+    if (isAnimating || history.length === 0) return;
+
+    const previous = history.pop();
+    if (!previous) return;
+
+    isAnimating = true;
+
+    layers.pop()?.element.remove();
+    cursor -= 1;
+    position -= 1;
+
+    // DOM 순서는 layers 순서와 같게 유지한다. append 하면 어긋난다.
+    const restored = createCard(previous.pose, isSaved);
+    deck.prepend(restored.element);
+    layers.unshift(restored);
+
+    // 나갔던 방향에서 다시 들어오도록 시작 위치를 잡는다.
+    const distance = (window.innerWidth || 420) * 1.35;
+    const startXOffset = previous.direction === 'right' ? distance : -distance;
+    const startRotation = previous.direction === 'right' ? 22 : -22;
+    restored.element.style.transform = `translate3d(${startXOffset}px, 40px, 0) rotate(${startRotation}deg)`;
+
+    // 시작값을 브라우저가 실제로 반영하게 만든 뒤 제자리 transform 을 줘야 트랜지션이 걸린다.
+    // requestAnimationFrame 을 쓰면 탭이 백그라운드일 때 콜백이 안 와서 덱이 잠길 수 있다.
+    void restored.element.offsetWidth;
+
+    onUndo(previous.pose, previous.direction === 'right');
+    notifyHistoryChange();
+
     applyLayout();
     isAnimating = false;
     notifyTopChange();
   }
 
   /**
-   * 카드를 날려보내고 다음 포즈로 넘어간다. 방향은 애니메이션 방향일 뿐 결과는 같다.
+   * 카드를 날려보내고 다음 포즈로 넘어간다.
+   * 오른쪽은 좋아요(찜), 왼쪽은 그저 그래요다.
    * @param {'left' | 'right'} direction
    * @param {number} [dy] 손을 뗀 순간의 세로 이동량
    */
@@ -217,6 +274,8 @@ export function createPoseDeck({ poses, isSaved, onTopChange }) {
     if (!top || isAnimating) return;
 
     isAnimating = true;
+    if (direction === 'right') onLike(top.pose);
+    else onPass(top.pose);
 
     const distance = (window.innerWidth || 420) * 1.35;
     const endX = direction === 'right' ? distance : -distance;
@@ -231,7 +290,7 @@ export function createPoseDeck({ poses, isSaved, onTopChange }) {
     const finish = () => {
       if (hasAdvanced) return;
       hasAdvanced = true;
-      advance();
+      advance(direction);
     };
 
     if (typeof top.element.animate !== 'function') {
@@ -363,6 +422,7 @@ export function createPoseDeck({ poses, isSaved, onTopChange }) {
     element: deck,
     getTopPose: () => layers[0]?.pose ?? null,
     syncSavedState,
+    undo,
     destroy: () => {
       cancelSpring?.();
       window.clearTimeout(flyOutTimerId);

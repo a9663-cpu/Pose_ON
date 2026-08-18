@@ -17,6 +17,7 @@ import { topBar, optionCard, pillButton, progressSteps } from './ui.js';
  * @param {{ value: T, label: string, hint: string }[]} options.choices
  * @param {T | null} options.initialValue
  * @param {string} options.ctaLabel
+ * @param {boolean} [options.submitOnSelect] 고르는 즉시 다음으로 (하단 CTA 없음)
  * @param {() => void} options.onBack
  * @param {(value: T) => void} options.onSubmit
  * @returns {{ element: HTMLElement, tone: string }}
@@ -30,6 +31,7 @@ export function createChoiceScreen({
   choices,
   initialValue,
   ctaLabel,
+  submitOnSelect = false,
   onBack,
   onSubmit,
 }) {
@@ -64,6 +66,9 @@ export function createChoiceScreen({
       card.setAttribute('aria-checked', isSelected ? 'true' : 'false');
     });
     submitButton.disabled = false;
+
+    // 선택 표시가 한 프레임 보인 뒤 넘어가야 "눌렸다"는 느낌이 난다.
+    if (submitOnSelect) window.setTimeout(() => onSubmit(value), 140);
   }
 
   const element = el('section', { class: 'screen screen--setup' }, [
@@ -76,7 +81,7 @@ export function createChoiceScreen({
       el('div', { class: 'setup__options', role: 'radiogroup', 'aria-label': question }, cards),
     ]),
 
-    el('div', { class: 'setup__footer' }, [submitButton]),
+    submitOnSelect ? null : el('div', { class: 'setup__footer' }, [submitButton]),
   ]);
 
   return { element, tone: 'setup' };

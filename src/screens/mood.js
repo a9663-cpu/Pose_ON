@@ -1,4 +1,4 @@
-/** 2단계 — 무드 선택 */
+/** 2단계 — 무드 선택 (1단계 인원 선택은 첫 화면에서 끝난다) */
 
 import { getMoodOptions } from '../data/poses.js';
 import { createChoiceScreen } from '../components/choiceScreen.js';
@@ -19,7 +19,9 @@ export function createMoodScreen() {
     choices: moods.map((mood) => ({ value: mood.id, label: mood.label, hint: mood.hint })),
     initialValue: getMood(),
     ctaLabel: '포즈 보기',
-    onBack: () => navigate('#/people'),
+    // 고르는 즉시 포즈로 넘어간다. 촬영 직전이라 한 탭이라도 줄이는 게 낫다.
+    submitOnSelect: true,
+    onBack: () => navigate('#/'),
     onSubmit: (mood) => {
       setMood(mood);
       trackEvent('select_mood', { mood, people: getPeople() ?? 0 });
@@ -28,7 +30,7 @@ export function createMoodScreen() {
   });
 }
 
-/** 인원 수를 안 고르고 바로 들어온 경우 1단계로 되돌린다. */
+/** 인원 수를 안 고르고 바로 들어온 경우 첫 화면으로 되돌린다. */
 export function guardMoodScreen() {
-  return getPeople() === null ? '#/people' : null;
+  return getPeople() === null ? '#/' : null;
 }

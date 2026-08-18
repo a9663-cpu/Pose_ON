@@ -9,7 +9,7 @@ import {
   pillButton,
   conditionChip,
   emptyState,
-  heartIcon,
+  undoIcon,
 } from '../components/ui.js';
 import { createPoseDeck } from '../components/poseDeck.js';
 import { requestFeedbackPopup } from '../components/feedbackPopup.js';
@@ -29,7 +29,7 @@ import { navigate } from '../router.js';
 
 /** 조건이 없으면 설정 화면으로 되돌린다. */
 export function guardDeckScreen() {
-  return hasCompleteCondition() ? null : '#/people';
+  return hasCompleteCondition() ? null : '#/';
 }
 
 export function createDeckScreen() {
@@ -73,61 +73,56 @@ export function createDeckScreen() {
       emptyState({
         title: '보여드릴 포즈가 없어요',
         description: 'src/data/poses.js 에 포즈를 추가하면 바로 여기에 나타나요.',
-        action: pillButton({ label: '조건 변경', variant: 'pearl', onClick: () => navigate('#/people') }),
+        action: pillButton({ label: '조건 변경', variant: 'pearl', onClick: () => navigate('#/') }),
       }),
     ]);
     return { element, tone: 'deck' };
   }
 
-  // 찜은 이 버튼만 담당한다. 눌러도 카드는 넘어가지 않고 그 자리에서 상태만 바뀐다.
-  let likeIcon = heartIcon({ filled: false, size: 18 });
-  const likeButton = pillButton({
-    label: '마음에 들어요',
-    variant: 'primary',
-    leading: likeIcon,
-    onClick: () => toggleSaveCurrentPose(),
+  const undoButton = pillButton({
+    label: '되돌리기',
+    variant: 'pearl',
+    leading: undoIcon(),
+    disabled: true,
+    onClick: () => poseDeck.undo(),
   });
-  const likeLabel = likeButton.querySelector('.pill__label');
 
-  /** @param {import('../data/poses.js').Pose | null} pose */
-  function syncLikeButton(pose) {
-    const saved = pose !== null && isSaved(pose.id);
-    const nextIcon = heartIcon({ filled: saved, size: 18 });
-    likeIcon.replaceWith(nextIcon);
-    likeIcon = nextIcon;
-    if (likeLabel) likeLabel.textContent = saved ? '찜했어요' : '마음에 들어요';
+  /** 오른쪽으로 넘김 = 좋아요. 이미 찜한 포즈면 그대로 두고 넘어간다. */
+  function likeTopPose(pose) {
+    const isNewlySaved = addSaved(pose.id);
+    showToast(isNewlySaved ? '찜한 포즈에 담았어요' : '이미 찜한 포즈예요');
+
+    if (isNewlySaved) trackLike(true);
+    trackEvent('like_pose', { pose_id: pose.id, people, mood });
+    refreshSavedAction();
   }
 
-  function toggleSaveCurrentPose() {
-    const pose = poseDeck.getTopPose();
-    if (pose === null) return;
+  /** 왼쪽으로 넘김 = 그저 그래요. 저장은 하지 않고 어떤 포즈가 넘겨지는지만 GA 로 본다. */
+  function passTopPose(pose) {
+    trackEvent('pass_pose', { pose_id: pose.id, people, mood });
+  }
 
-    const isSavedNow = !isSaved(pose.id);
-    if (isSavedNow) {
-      addSaved(pose.id);
-      showToast('찜한 포즈에 담았어요');
-    } else {
+  /** @param {import('../data/poses.js').Pose} pose @param {boolean} wasLiked */
+  function undoSwipe(pose, wasLiked) {
+    if (wasLiked) {
       removeSaved(pose.id);
-      showToast('찜을 해제했어요');
+      refreshSavedAction();
     }
-
-    trackLike(isSavedNow);
-    trackEvent(isSavedNow ? 'like_pose' : 'unlike_pose', {
-      pose_id: pose.id,
-      people,
-      mood,
-    });
-    poseDeck.syncSavedState();
-    syncLikeButton(pose);
-    refreshSavedAction();
+    showToast('되돌렸어요');
+    trackEvent('undo_swipe', { pose_id: pose.id, was_liked: wasLiked });
   }
 
   const poseDeck = createPoseDeck({
     poses,
     isSaved,
+    onLike: likeTopPose,
+    onPass: passTopPose,
+    onUndo: undoSwipe,
+    onHistoryChange: (canUndo) => {
+      undoButton.disabled = !canUndo;
+    },
     onTopChange: (pose, position, total) => {
       counter.textContent = `${position} / ${total}`;
-      syncLikeButton(pose);
 
       // 서비스를 충분히 써 본 뒤에만 피드백을 묻는다. 조건이 안 되면 아무 일도 없다.
       countPoseView(pose);
@@ -151,14 +146,14 @@ export function createDeckScreen() {
         variant: 'pearl',
         onClick: () => {
           trackEvent('change_condition', { people, mood });
-          navigate('#/people');
+          navigate('#/');
         },
       }),
-      likeButton,
+      undoButton,
     ]),
     el('p', {
       class: 'deck-hint t-fine-print',
-      text: '← 좌우 어느 쪽으로 넘겨도 다음 포즈 →',
+      text: '← 그저 그래요 · 좋아요 →',
     }),
   ]);
 

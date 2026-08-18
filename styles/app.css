@@ -306,24 +306,23 @@ html[data-screen='deck'] body {
 }
 
 /* ── 첫 화면 ──────────────────────────────────────────── */
+/* 인원 선택을 여기서 끝내고, 그 위에 실제 포즈를 흘려서 뭘 주는 서비스인지 바로 보여준다. */
 .screen--home {
-  padding: calc(var(--space-xxl) + env(safe-area-inset-top)) var(--space-lg)
-    calc(var(--space-xl) + env(safe-area-inset-bottom) + var(--feedback-height));
+  /* 머리말 · 미리보기 · 인원 선택을 한 덩어리로 세로 가운데 정렬한다.
+     아래로 밀어붙이면 큰 화면에서 가운데가 휑하게 빈다. */
+  justify-content: center;
+  padding: calc(var(--space-xl) + env(safe-area-inset-top)) 0
+    calc(var(--space-lg) + env(safe-area-inset-bottom) + var(--feedback-height));
   background: var(--color-surface-tile-1);
   color: var(--color-on-dark);
 }
 
-.home__body {
-  margin-top: auto;
-}
-
-.home__eyebrow {
-  color: var(--color-body-muted);
-  margin-bottom: var(--space-sm);
+.home__head {
+  padding: 0 var(--space-lg);
 }
 
 .home__wordmark {
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-xxs);
 }
 
 .home__wordmark-accent {
@@ -331,24 +330,97 @@ html[data-screen='deck'] body {
 }
 
 .home__copy {
+  color: var(--color-body-muted);
+}
+
+/* 포즈 미리보기 — 같은 목록을 두 벌 이어 붙이고 절반만큼 밀어 끊김 없이 순환시킨다. */
+.preview {
+  /* 여러 장이 한눈에 들어와야 "포즈가 많다"가 전달된다. 크게 키우면 슬라이드쇼처럼 보인다. */
+  flex: 0 0 auto;
+  height: 150px;
+  overflow: hidden;
+  margin: var(--space-lg) 0;
+  /* 양 끝을 흐리게 해서 잘린 느낌 대신 계속 이어지는 느낌을 준다 */
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.preview__track {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  gap: var(--space-xs);
+  width: max-content;
+  padding: 0 var(--space-lg);
+  animation: preview-scroll 42s linear infinite;
+}
+
+.preview__item {
+  flex: 0 0 auto;
+  height: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-tile-3);
+}
+
+.preview__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@keyframes preview-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    /* 두 벌 중 한 벌 길이만큼만 밀면 이어지는 지점이 똑같아 끊겨 보이지 않는다 */
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.home__picker {
+  flex: 0 0 auto;
+  padding: 0 var(--space-lg);
+}
+
+.home__question {
   margin-bottom: var(--space-md);
 }
 
-.home__actions {
-  margin-top: auto;
+.home__options {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
-  padding-top: var(--space-xxl);
+  gap: var(--space-xs);
+}
+
+/* 어두운 첫 화면에서는 선택 카드도 어두운 타일로 맞춘다. */
+.home__options .option-card {
+  min-height: 76px;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface-tile-2);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-on-dark);
+}
+
+.home__options .option-card__hint {
+  color: var(--color-body-muted);
+}
+
+.home__options .option-card__mark {
+  border-color: rgba(255, 255, 255, 0.24);
 }
 
 .home__saved-link {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
+  justify-content: center;
+  gap: var(--space-xxs);
+  width: 100%;
   min-height: 44px;
-  padding: 0 var(--space-sm);
+  margin-top: var(--space-sm);
   background: none;
   border: 0;
   color: var(--color-primary-on-dark);
@@ -548,9 +620,10 @@ html[data-screen='deck'] body {
 
 /* 좌우 어느 쪽으로 넘겨도 결과가 같으므로 두 스탬프 모두 중립 흰색이다.
    Action Blue 는 찜(유일한 저장 액션)에만 남겨 둔다. */
+/* 오른쪽으로 넘기면 찜으로 이어지므로 유일한 액션 컬러를 쓴다. */
 .pose-card__stamp--drag-right {
   left: var(--space-lg);
-  color: var(--color-on-dark);
+  color: var(--color-primary-on-dark);
   transform: rotate(-10deg);
 }
 
@@ -579,11 +652,12 @@ html[data-screen='deck'] body {
 .deck-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg) 0;
 }
 
-.deck-actions .pill--primary {
+.deck-actions .pill {
   flex: 1;
 }
 
@@ -821,6 +895,17 @@ html[data-screen='deck'] body {
 
 /* 세로가 짧은 화면 — 사진에 최대한 높이를 몰아준다. */
 @media (max-height: 700px) {
+  /* 첫 화면에서는 인원 카드가 잘리지 않는 게 우선이라 미리보기를 줄인다. */
+  .preview {
+    height: 104px;
+    margin-block: var(--space-md);
+  }
+
+  .home__options .option-card {
+    min-height: 64px;
+    padding: var(--space-sm) var(--space-lg);
+  }
+
   .deck-header {
     padding-block: var(--space-xs) var(--space-xxs);
   }
@@ -844,5 +929,10 @@ html[data-screen='deck'] body {
   .option-card,
   .toast {
     transition-duration: 1ms;
+  }
+
+  /* 움직임을 줄여달라는 설정이면 미리보기 띠는 멈춰 둔다. */
+  .preview__track {
+    animation: none;
   }
 }

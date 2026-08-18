@@ -34,9 +34,16 @@ const HEART_PATH =
   'M12 20.5s-7.5-4.7-7.5-9.7a4.3 4.3 0 0 1 7.5-2.8 4.3 4.3 0 0 1 7.5 2.8c0 5-7.5 9.7-7.5 9.7Z';
 const BACK_PATH = 'M15 5 8 12l7 7';
 
+const UNDO_PATH = 'M9 14 4 9l5-5M4 9h8a7 7 0 1 1 0 14h-3';
+
 /** @param {{ filled?: boolean, size?: number }} [options] */
 export function heartIcon(options) {
   return icon(HEART_PATH, options);
+}
+
+/** 되돌리기(반시계 화살표) @param {{ size?: number }} [options] */
+export function undoIcon({ size = 16 } = {}) {
+  return icon(UNDO_PATH, { size });
 }
 
 /**
