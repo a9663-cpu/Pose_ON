@@ -18,8 +18,21 @@ const VISIBLE_CARDS = 3;
 const SWIPE_DISTANCE_THRESHOLD = 96;
 /** 짧게 튕겨도 넘어가도록 하는 속도 임계값 (px/s) */
 const SWIPE_VELOCITY_THRESHOLD = 550;
-/** 카드가 화면 밖으로 날아가는 시간 (ms) */
+/**
+ * 손으로 넘겼을 때 카드가 마저 날아가는 시간 (ms).
+ * 이미 손가락이 카드를 끌어다 놓은 뒤라 짧아야 손에 붙는 느낌이 난다.
+ */
 const FLY_OUT_DURATION_MS = 300;
+
+/**
+ * 버튼으로 넘겼을 때 (ms).
+ * 버튼은 "끄는 동작"이 없어서 같은 길이로 날리면 카드가 그냥 사라져 보인다.
+ * 끌었다가 놓는 두 구간을 애니메이션이 대신 보여줘야 해서 더 길다.
+ */
+const BUTTON_FLY_OUT_DURATION_MS = 520;
+
+/** 버튼으로 넘길 때 "끄는 구간"에서 카드가 먼저 나가는 거리 (px) */
+const BUTTON_PULL_DISTANCE = 84;
 /**
  * 속도를 계산할 때 쓰는 최소 샘플 간격 (ms).
  * 1ms도 안 되는 구간으로 나누면 속도가 수만 px/s 로 튀어서 스프링이 폭주한다.
@@ -272,7 +285,7 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
    * @param {'left' | 'right'} direction
    * @param {number} [dy] 손을 뗀 순간의 세로 이동량
    */
-  function flyOut(direction, dy = 0) {
+  function flyOut(direction, { dy = 0, fromButton = false } = {}) {
     const top = layers[0];
     if (!top || isAnimating) return;
 
@@ -280,13 +293,15 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
     if (direction === 'right') onLike(top.pose);
     else onPass(top.pose);
 
+    const sign = direction === 'right' ? 1 : -1;
     const distance = (window.innerWidth || 420) * 1.35;
-    const endX = direction === 'right' ? distance : -distance;
-    const endRotation = direction === 'right' ? 22 : -22;
     const from = top.element.style.transform || 'translate3d(0, 0, 0) scale(1)';
-    const to = `translate3d(${endX}px, ${dy * 0.18 + 40}px, 0) rotate(${endRotation}deg)`;
-
-    setStampOpacity(top, direction === 'right' ? SWIPE_DISTANCE_THRESHOLD : -SWIPE_DISTANCE_THRESHOLD);
+    const to = `translate3d(${sign * distance}px, ${dy * 0.18 + 40}px, 0) rotate(${sign * 22}deg)`;
+    // 움직임을 줄여달라는 설정이면 끄는 구간을 길게 보여주지 않는다.
+    const wantsLessMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const useButtonMotion = fromButton && !wantsLessMotion;
+    const duration = useButtonMotion ? BUTTON_FLY_OUT_DURATION_MS : FLY_OUT_DURATION_MS;
+    const stamp = direction === 'right' ? top.dragRightStamp : top.dragLeftStamp;
 
     // 애니메이션 완료 신호는 한 번만 처리한다.
     let hasAdvanced = false;
@@ -297,22 +312,55 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
     };
 
     if (typeof top.element.animate !== 'function') {
+      setStampOpacity(top, sign * SWIPE_DISTANCE_THRESHOLD);
       finish();
       return;
     }
 
-    const animation = top.element.animate(
-      [
-        { transform: from, opacity: 1 },
-        { transform: to, opacity: 0 },
-      ],
-      { duration: FLY_OUT_DURATION_MS, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' },
-    );
-    animation.addEventListener('finish', finish, { once: true });
+    if (useButtonMotion) {
+      // 손으로 넘기는 것과 같은 두 구간을 만든다.
+      //   1) 끄는 구간 — 천천히 밀려 나가면서 도장이 떠오른다
+      //   2) 놓는 구간 — 가속이 붙어 화면 밖으로 빠진다
+      top.element.animate(
+        [
+          { transform: from, opacity: 1, offset: 0, easing: 'cubic-bezier(0.25, 0.7, 0.4, 1)' },
+          {
+            transform: `translate3d(${sign * BUTTON_PULL_DISTANCE}px, 10px, 0) rotate(${sign * 6}deg)`,
+            opacity: 1,
+            offset: 0.42,
+            easing: 'cubic-bezier(0.5, 0, 1, 0.5)',
+          },
+          { transform: to, opacity: 0, offset: 1 },
+        ],
+        { duration, fill: 'forwards' },
+      ).addEventListener('finish', finish, { once: true });
+
+      // 도장도 끄는 구간에 맞춰 떠오르게 한다. 즉시 켜면 툭 튀어나온 것처럼 보인다.
+      stamp.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 1, offset: 0.42 },
+          { opacity: 1, offset: 1 },
+        ],
+        { duration, fill: 'forwards' },
+      );
+    } else {
+      // 손으로 이미 끌어다 놓은 뒤라 남은 거리만 이어서 날린다.
+      setStampOpacity(top, sign * SWIPE_DISTANCE_THRESHOLD);
+      top.element
+        .animate(
+          [
+            { transform: from, opacity: 1 },
+            { transform: to, opacity: 0 },
+          ],
+          { duration, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' },
+        )
+        .addEventListener('finish', finish, { once: true });
+    }
 
     // finish 이벤트가 오지 않는 환경(백그라운드 탭, 애니메이션 미지원 등)에서도
     // 덱이 멈춰버리지 않도록 안전장치를 둔다.
-    flyOutTimerId = window.setTimeout(finish, FLY_OUT_DURATION_MS + 80);
+    flyOutTimerId = window.setTimeout(finish, duration + 80);
   }
 
   /**
@@ -399,7 +447,7 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
 
     if (passedDistance || passedVelocity) {
       const signal = passedDistance ? dx : velocityX;
-      flyOut(signal > 0 ? 'right' : 'left', dy);
+      flyOut(signal > 0 ? 'right' : 'left', { dy });
     } else {
       springBack(dx, dy);
     }
@@ -407,8 +455,9 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
 
   /** 데스크톱에서 방향키로도 넘길 수 있게. @param {KeyboardEvent} event */
   function handleKeyDown(event) {
-    if (event.key === 'ArrowRight') flyOut('right');
-    else if (event.key === 'ArrowLeft') flyOut('left');
+    // 끄는 동작이 없다는 점은 버튼과 같으므로 같은 애니메이션을 쓴다.
+    if (event.key === 'ArrowRight') flyOut('right', { fromButton: true });
+    else if (event.key === 'ArrowLeft') flyOut('left', { fromButton: true });
   }
 
   deck.addEventListener('pointerdown', handlePointerDown);
@@ -431,6 +480,7 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
     const top = layers[0];
     if (!top || isAnimating) return;
     if (typeof top.element.animate !== 'function') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
     const nudge = 44;
     const animation = top.element.animate(
@@ -472,8 +522,8 @@ export function createPoseDeck({ poses, isSaved, onLike, onPass, onUndo, onTopCh
     getTopPose: () => layers[0]?.pose ?? null,
     syncSavedState,
     undo,
-    likeTopCard: () => flyOut('right'),
-    passTopCard: () => flyOut('left'),
+    likeTopCard: () => flyOut('right', { fromButton: true }),
+    passTopCard: () => flyOut('left', { fromButton: true }),
     playSwipeHint,
     destroy: () => {
       cancelSpring?.();
